@@ -122,16 +122,25 @@ const CHECK_SECTIONS = [
     { id:"luz_alta",     label:"Luz alta" },
     { id:"luz_baja",     label:"Luz baja" },
     { id:"luces_lat",    label:"Luces laterales" },
+    { id:"luces_freno",  label:"Luces de freno" },
     { id:"antiniebla",   label:"Antinieblas" },
     { id:"susp_tra",     label:"Suspensión trasera" },
     { id:"susp_del",     label:"Suspensión delantera" },
     { id:"fren_relev",   label:"Relevamiento de frenos" },
+    { id:"bocina",       label:"Bocina" },
     { id:"espejos",      label:"Espejos" },
     { id:"apertura",     label:"Apertura de puertas" },
     { id:"levantacrist", label:"Levantacristal" },
     { id:"parabrisas",   label:"Parabrisas" },
     { id:"bateria",      label:"Batería" },
+    { id:"bornes_bat",   label:"Bornes de batería" },
     { id:"opticas",      label:"Ópticas" },
+  ]},
+  { id:"estetico", title:"Estado Estético", icon:"✨", items:[
+    { id:"est_chapa",    label:"Chapa / carrocería" },
+    { id:"est_opticas",  label:"Ópticas exteriores" },
+    { id:"est_asientos", label:"Asientos / tapizado" },
+    { id:"est_limpieza", label:"Limpieza interior y exterior" },
   ]},
   { id:"documentacion", title:"Documentación", icon:"📄", items:[
     { id:"patente", label:"Estado de PATENTE" },
@@ -149,6 +158,7 @@ const CHECK_SECTIONS = [
     { id:"mini_compresor", label:"Mini compresor" },
     { id:"botiquin",       label:"Botiquín de primeros auxilios" },
     { id:"fusibles",       label:"Fusibles de cambio" },
+    { id:"caja_fusilera",  label:"Caja fusilera" },
   ]},
   { id:"kit_aux", title:"Kit Auxiliar", icon:"🔑", items:[
     { id:"llave_cruz", label:"Llave cruz" },
@@ -178,7 +188,7 @@ const TRAILER_CHECK_ITEMS = [
 ];
 
 /* ─────────────── MAQUINARIA PESADA — CONSTANTES ─────────────── */
-const MAQUINA_TIPOS = [
+const MAQUINA_TIPOS = window.MAQUINA_TIPOS = [
   { id:"camion_minero",  label:"Camión minero",     icon:"🚚" },
   { id:"pala_mecanica",  label:"Pala mecánica",     icon:"🦾" },
   { id:"excavadora",     label:"Excavadora",        icon:"🏗️" },
@@ -1227,12 +1237,29 @@ function NewCompany({ setPage }) {
 }
 
 /* ─────────────── COMPANY DETAIL ─────────────── */
-function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelectedVehicle }) {
+function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelectedVehicle, setSelectedMaquina }) {
   const [showAddVehicle, setShowAddVehicle] = useState(false);
   const [vForm, setVForm] = useState({ plate:"", vehicle:"", nroMovil:"", notes:"", tieneTrailer:false, trailerCheck:{} });
   const [saving, setSaving] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState(null); // vehículo que se está editando
+  const [eForm, setEForm] = useState(null); // formulario de edición
 
   const vehicles = company.vehicles || [];
+
+  function startEdit(v) {
+    setEditingVehicle(v.id);
+    setEForm({ plate: v.plate, vehicle: v.vehicle, nroMovil: v.nroMovil||"", notes: v.notes||"", tieneTrailer: v.tieneTrailer||false, trailerCheck: v.trailerCheck||{} });
+  }
+
+  async function saveEdit(vehicleId) {
+    setSaving(true);
+    const updatedVehicles = vehicles.map(v => v.id === vehicleId ? { ...v, ...eForm, plate: eForm.plate.toUpperCase() } : v);
+    await fbUpdate("companies", company.id, { vehicles: updatedVehicles });
+    setSelectedCompany({ ...company, vehicles: updatedVehicles });
+    setEditingVehicle(null);
+    setEForm(null);
+    setSaving(false);
+  }
 
   async function addVehicle() {
     if (!vForm.plate || !vForm.vehicle) { alert("Ingresá dominio y tipo de vehículo."); return; }
@@ -1240,7 +1267,6 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
     const newVehicle = { ...vForm, id: Date.now().toString(), plate: vForm.plate.toUpperCase(), createdAt: Date.now() };
     const updatedVehicles = [...vehicles, newVehicle];
     await fbUpdate("companies", company.id, { vehicles: updatedVehicles });
-    // Actualizar la empresa local
     setSelectedCompany({ ...company, vehicles: updatedVehicles });
     setVForm({ plate:"", vehicle:"", nroMovil:"", notes:"", tieneTrailer:false, trailerCheck:{} });
     setShowAddVehicle(false);
@@ -1387,14 +1413,112 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
                     style={{ flex:1, padding:"8px", borderRadius:10, background:"#2a2a2a", border:"1px solid #3a3a3a", color:"#9ca3af", fontWeight:700, fontSize:12, cursor:"pointer" }}>
                     Ver historial
                   </button>
+                  <button onClick={() => editingVehicle === v.id ? (setEditingVehicle(null), setEForm(null)) : startEdit(v)}
+                    style={{ padding:"8px 12px", borderRadius:10, background: editingVehicle===v.id ? "#f9731622" : "#1a2a1a", border:`1px solid ${editingVehicle===v.id ? "#f9731644" : "#10b98133"}`, color: editingVehicle===v.id ? "#f97316" : "#10b981", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                    ✏️
+                  </button>
                   <button onClick={() => deleteVehicle(v.id)} style={{ padding:"8px 12px", borderRadius:10, background:"transparent", border:"1px solid #ef444433", color:"#ef4444", fontWeight:700, fontSize:12, cursor:"pointer" }}>
                     🗑️
                   </button>
                 </div>
+
+                {/* Formulario edición inline */}
+                {editingVehicle === v.id && eForm && (
+                  <div style={{ marginTop:12, padding:14, background:"#111", borderRadius:12, border:"1px solid #10b98133", display:"flex", flexDirection:"column", gap:10 }}>
+                    <div style={{ color:"#10b981", fontSize:12, fontWeight:700, textTransform:"uppercase", marginBottom:2 }}>✏️ Editar vehículo</div>
+                    <input value={eForm.plate} onChange={e => setEForm(f => ({...f, plate: e.target.value.toUpperCase()}))} placeholder="Dominio / Patente"
+                      style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+                    <input value={eForm.vehicle} onChange={e => setEForm(f => ({...f, vehicle: e.target.value}))} placeholder="Tipo de vehículo"
+                      style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+                    <input value={eForm.nroMovil} onChange={e => setEForm(f => ({...f, nroMovil: e.target.value}))} placeholder="Nro. Móvil / Interno"
+                      style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+                    <input value={eForm.notes} onChange={e => setEForm(f => ({...f, notes: e.target.value}))} placeholder="Notas"
+                      style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+
+                    {/* Toggle trailer */}
+                    <button onClick={() => setEForm(f => ({...f, tieneTrailer: !f.tieneTrailer}))}
+                      style={{ width:"100%", padding:"10px 14px", borderRadius:10, cursor:"pointer", border:`2px solid ${eForm.tieneTrailer ? "#f97316" : "#2a2a2a"}`, background: eForm.tieneTrailer ? "#f9731622" : "#1a1a1a", color: eForm.tieneTrailer ? "#f97316" : "#6b7280", fontWeight:700, fontSize:13, display:"flex", alignItems:"center", gap:8 }}>
+                      <span>🚐</span><span style={{ flex:1 }}>¿Tiene trailer?</span><span>{eForm.tieneTrailer ? "✓ Sí" : "+ No"}</span>
+                    </button>
+
+                    {eForm.tieneTrailer && (
+                      <div style={{ background:"#0d0d0d", borderRadius:10, padding:12, border:"1px solid #f9731633" }}>
+                        <div style={{ color:"#f97316", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>Control del trailer</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                          {TRAILER_CHECK_ITEMS.map(item => {
+                            const estado = (eForm.trailerCheck||{})[item.id] || null;
+                            return (
+                              <div key={item.id} style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                                <span style={{ color:"#9ca3af", fontSize:12, minWidth:130 }}>{item.label}</span>
+                                <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                                  {ESTADOS.map(est => (
+                                    <button key={est.id} onClick={() => setEForm(f => ({...f, trailerCheck:{...(f.trailerCheck||{}), [item.id]: estado===est.id ? null : est.id}}))}
+                                      style={{ padding:"3px 7px", borderRadius:7, fontSize:10, fontWeight:700, cursor:"pointer", border:`1px solid ${estado===est.id ? est.color : "#333"}`, background: estado===est.id ? est.bg : "transparent", color: estado===est.id ? est.color : "#4b5563" }}>
+                                      {est.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button onClick={() => saveEdit(v.id)} disabled={saving}
+                        style={{ flex:1, padding:"10px", background:"linear-gradient(135deg,#10b981,#059669)", border:"none", color:"#fff", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:13 }}>
+                        {saving ? "Guardando..." : "✓ Guardar cambios"}
+                      </button>
+                      <button onClick={() => { setEditingVehicle(null); setEForm(null); }}
+                        style={{ padding:"10px 14px", background:"transparent", border:"1px solid #333", color:"#6b7280", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:13 }}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })
       }
+
+      {/* Maquinaria de la empresa */}
+      {(() => {
+        const maquinasEmpresa = (data.maquinas || []).filter(m => m.empresaId === company.id);
+        return (
+          <div style={{ marginTop:16 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+              <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", margin:0 }}>🏗️ Maquinaria ({maquinasEmpresa.length})</h3>
+              <button onClick={() => { setPage("new-maquina"); }} style={{ padding:"8px 14px", borderRadius:10, background:"#7c3aed22", border:"1px solid #7c3aed44", color:"#a78bfa", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                + Agregar
+              </button>
+            </div>
+            {maquinasEmpresa.length === 0
+              ? <div style={{ textAlign:"center", color:"#4b5563", padding:"16px 0", fontSize:14 }}>Sin maquinaria registrada</div>
+              : maquinasEmpresa.map(m => {
+                  const tipo = (window.MAQUINA_TIPOS||[]).find(t => t.id === m.tipo);
+                  return (
+                    <div key={m.id} style={{ background:"#1a1a1a", borderRadius:14, padding:"14px 16px", border:"1px solid #a78bfa33", marginBottom:10 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                        <div style={{ width:42, height:42, borderRadius:10, background:"#7c3aed22", border:"2px solid #a78bfa", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{tipo?.icon || "🏗️"}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ color:"#f1f5f9", fontWeight:700, fontSize:14 }}>{m.nombre || tipo?.label || "Maquinaria"}</div>
+                          {m.dominio && <div style={{ color:"#9ca3af", fontSize:12 }}>Dominio: {m.dominio}</div>}
+                          {m.nroSerie && <div style={{ color:"#9ca3af", fontSize:12 }}>Serie: {m.nroSerie}</div>}
+                        </div>
+                        <div style={{ color:"#a78bfa", fontSize:12, fontWeight:700 }}>{(m.checks||[]).length} chequeos</div>
+                      </div>
+                      <button onClick={() => { setSelectedMaquina(m); setPage("maquina-detail"); }}
+                        style={{ width:"100%", marginTop:10, padding:"8px", borderRadius:10, background:"#2a2a2a", border:"1px solid #a78bfa33", color:"#a78bfa", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                        Ver detalle
+                      </button>
+                    </div>
+                  );
+                })
+            }
+          </div>
+        );
+      })()}
 
       <button onClick={deleteCompany} style={{ width:"100%", marginTop:8, padding:"14px", background:"#1a1a1a", border:"1px solid #ef444444", color:"#ef4444", borderRadius:14, cursor:"pointer", fontWeight:700, fontSize:14 }}>
         🗑️ Eliminar empresa
@@ -3611,6 +3735,159 @@ function GpsEntidadCard({ entidad, tipo, onConfigClick, onWhatsApp }) {
 }
 
 /* ── Página principal GPS / Alertas ── */
+/* ─────────────── INFORME DE FLOTAS ─────────────── */
+function InformeFlotas({ data, setPage }) {
+  const vehicles = data.companies.flatMap(comp =>
+    (comp.vehicles || []).map(v => ({
+      ...v,
+      companyId: comp.id,
+      companyName: comp.name,
+      companyPhone: comp.phone || "",
+    }))
+  );
+  const maquinas = data.maquinas || [];
+
+  // Calcular nivel de cada vehículo
+  function nivelEntidad(entidad) {
+    const alerts = calcAlertas(entidad.gpsConfig || {});
+    if (alerts.some(a => a.nivel === "critico")) return "critico";
+    if (alerts.some(a => a.nivel === "prevencion")) return "prevencion";
+    if (entidad.gpsConfig?.kmActuales) return "ok";
+    return "sin_gps";
+  }
+
+  // Agrupar por empresa
+  const empresasConVehiculos = data.companies.map(comp => {
+    const vehs = (comp.vehicles || []).map(v => ({
+      ...v, companyId: comp.id, companyName: comp.name, companyPhone: comp.phone || ""
+    }));
+    const maqsEmp = maquinas.filter(m => m.empresaId === comp.id);
+    const todas = [...vehs, ...maqsEmp];
+    const tieneCritico   = todas.some(e => nivelEntidad(e) === "critico");
+    const tienePrevencion = todas.some(e => nivelEntidad(e) === "prevencion");
+    const nivel = tieneCritico ? "critico" : tienePrevencion ? "prevencion" : "ok";
+    return { comp, vehs, maqsEmp, nivel };
+  }).filter(e => e.vehs.length > 0 || e.maqsEmp.length > 0)
+    .sort((a, b) => {
+      const orden = { critico: 0, prevencion: 1, ok: 2 };
+      return orden[a.nivel] - orden[b.nivel];
+    });
+
+  const totalCriticos   = vehicles.filter(v => nivelEntidad(v) === "critico").length + maquinas.filter(m => nivelEntidad(m) === "critico").length;
+  const totalPrevencion = vehicles.filter(v => nivelEntidad(v) === "prevencion").length + maquinas.filter(m => nivelEntidad(m) === "prevencion").length;
+  const totalOk         = vehicles.filter(v => nivelEntidad(v) === "ok").length + maquinas.filter(m => nivelEntidad(m) === "ok").length;
+
+  function colorNivel(nivel) {
+    if (nivel === "critico")   return { color:"#ef4444", bg:"#ef444422", border:"#ef444444", icon:"🔴" };
+    if (nivel === "prevencion") return { color:"#f59e0b", bg:"#f59e0b22", border:"#f59e0b44", icon:"🟡" };
+    if (nivel === "ok")        return { color:"#10b981", bg:"#10b98122", border:"#10b98144", icon:"🟢" };
+    return { color:"#4b5563", bg:"#1a1a1a", border:"#2a2a2a", icon:"⚫" };
+  }
+
+  function enviarWppEmpresa(comp, vehs, maqsEmp) {
+    const fecha = new Date().toLocaleDateString("es-AR");
+    let msg = `📋 *INFORME DE FLOTA — ASN Control Vehicular*\n`;
+    msg += `🏢 *${comp.name}*\n📅 ${fecha}\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    [...vehs, ...maqsEmp].forEach(e => {
+      const alerts = calcAlertas(e.gpsConfig || {});
+      const criticos = alerts.filter(a => a.nivel === "critico");
+      const prev = alerts.filter(a => a.nivel === "prevencion");
+      const nombre = e.plate ? `🚛 ${e.plate} ${e.vehicle||""}` : `🏗️ ${e.nombre||"Máquina"}`;
+      const km = e.gpsConfig?.kmActuales ? ` — ${Number(e.gpsConfig.kmActuales).toLocaleString()} km` : "";
+      msg += `\n${nombre}${km}\n`;
+      criticos.forEach(a => { msg += `  🔴 ${a.msg}\n`; });
+      prev.forEach(a => { msg += `  🟡 ${a.msg}\n`; });
+      if (!criticos.length && !prev.length && e.gpsConfig?.kmActuales) msg += `  🟢 OK\n`;
+      if (!e.gpsConfig?.kmActuales) msg += `  ⚫ Sin datos GPS\n`;
+    });
+    msg += `\n━━━━━━━━━━━━━━━━━━━━\n_ASN · Control y Prevención Vehicular_`;
+    const phone = (comp.phone||"").replace(/\D/g,"");
+    const url = phone ? `https://wa.me/54${phone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank");
+  }
+
+  return (
+    <div style={{ padding:"16px 16px 100px" }}>
+      <button onClick={() => setPage("gps")} style={{ background:"none", border:"none", color:"#10b981", cursor:"pointer", fontSize:14, fontWeight:700, marginBottom:16, padding:0 }}>← Volver</button>
+      <h2 style={{ color:"#f59e0b", margin:"0 0 4px", fontSize:22, fontWeight:900 }}>📋 Informe de Flotas</h2>
+      <p style={{ color:"#6b7280", fontSize:13, margin:"0 0 16px" }}>Estado de todas las empresas con GPS</p>
+
+      {/* Resumen */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:20 }}>
+        <div style={{ background:"#ef444422", border:"1px solid #ef444444", borderRadius:14, padding:"12px 8px", textAlign:"center" }}>
+          <div style={{ color:"#ef4444", fontWeight:900, fontSize:22 }}>{totalCriticos}</div>
+          <div style={{ color:"#ef4444", fontSize:10, fontWeight:700 }}>CRÍTICOS</div>
+        </div>
+        <div style={{ background:"#f59e0b22", border:"1px solid #f59e0b44", borderRadius:14, padding:"12px 8px", textAlign:"center" }}>
+          <div style={{ color:"#f59e0b", fontWeight:900, fontSize:22 }}>{totalPrevencion}</div>
+          <div style={{ color:"#f59e0b", fontSize:10, fontWeight:700 }}>PREVENCIÓN</div>
+        </div>
+        <div style={{ background:"#10b98122", border:"1px solid #10b98144", borderRadius:14, padding:"12px 8px", textAlign:"center" }}>
+          <div style={{ color:"#10b981", fontWeight:900, fontSize:22 }}>{totalOk}</div>
+          <div style={{ color:"#10b981", fontSize:10, fontWeight:700 }}>OK</div>
+        </div>
+      </div>
+
+      {empresasConVehiculos.length === 0
+        ? <div style={{ textAlign:"center", color:"#4b5563", padding:"40px 0" }}>
+            <div style={{ fontSize:48, marginBottom:12 }}>🏢</div>
+            <div>No hay empresas con vehículos registrados</div>
+            <button onClick={() => setPage("companies")} style={{ marginTop:12, padding:"10px 20px", borderRadius:10, background:"#60a5fa22", border:"1px solid #60a5fa44", color:"#60a5fa", fontWeight:700, cursor:"pointer", fontSize:13 }}>
+              → Ir a Empresas
+            </button>
+          </div>
+        : empresasConVehiculos.map(({ comp, vehs, maqsEmp, nivel }) => {
+            const c = colorNivel(nivel);
+            return (
+              <div key={comp.id} style={{ background:"#1a1a1a", borderRadius:16, padding:16, border:`1px solid ${c.border}`, marginBottom:14 }}>
+                {/* Header empresa */}
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+                  <div style={{ width:40, height:40, borderRadius:12, background:c.bg, border:`2px solid ${c.color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🏢</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ color:"#f1f5f9", fontWeight:900, fontSize:15 }}>{comp.name}</div>
+                    <div style={{ color:c.color, fontSize:11, fontWeight:700 }}>{c.icon} {nivel === "critico" ? "ATENCIÓN URGENTE" : nivel === "prevencion" ? "PREVENCIÓN" : nivel === "ok" ? "TODO OK" : "SIN GPS"}</div>
+                  </div>
+                  <button onClick={() => enviarWppEmpresa(comp, vehs, maqsEmp)}
+                    style={{ padding:"8px 10px", borderRadius:10, background:"#25d36622", border:"1px solid #25d36644", color:"#25d366", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                    💬 WA
+                  </button>
+                </div>
+
+                {/* Vehículos */}
+                {[...vehs, ...maqsEmp].map(e => {
+                  const alerts = calcAlertas(e.gpsConfig || {});
+                  const criticos = alerts.filter(a => a.nivel === "critico");
+                  const prev = alerts.filter(a => a.nivel === "prevencion");
+                  const nv = nivelEntidad(e);
+                  const nc = colorNivel(nv);
+                  const esVehiculo = !!e.plate;
+                  return (
+                    <div key={e.id} style={{ background:"#111", borderRadius:12, padding:"10px 12px", marginBottom:8, border:`1px solid ${nc.border}` }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: (criticos.length || prev.length) ? 6 : 0 }}>
+                        <span style={{ fontSize:16 }}>{esVehiculo ? "🚛" : "🏗️"}</span>
+                        <div style={{ flex:1 }}>
+                          <span style={{ color:"#f1f5f9", fontWeight:700, fontSize:13 }}>{esVehiculo ? e.plate : (e.nombre || "Máquina")}</span>
+                          {esVehiculo && e.vehicle && <span style={{ color:"#6b7280", fontSize:11, marginLeft:6 }}>{e.vehicle}</span>}
+                          {e.gpsConfig?.kmActuales && <span style={{ color:"#9ca3af", fontSize:11, marginLeft:6 }}>· {Number(e.gpsConfig.kmActuales).toLocaleString()} km</span>}
+                        </div>
+                        <span style={{ fontSize:14 }}>{nc.icon}</span>
+                      </div>
+                      {criticos.map((a, i) => <div key={i} style={{ color:"#ef4444", fontSize:11, paddingLeft:24, marginBottom:2 }}>🔴 {a.msg}</div>)}
+                      {prev.map((a, i) => <div key={i} style={{ color:"#f59e0b", fontSize:11, paddingLeft:24, marginBottom:2 }}>🟡 {a.msg}</div>)}
+                      {!e.gpsConfig?.kmActuales && <div style={{ color:"#4b5563", fontSize:11, paddingLeft:24 }}>Sin datos GPS configurados</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })
+      }
+    </div>
+  );
+}
+
+/* ─────────────── GPS ALERTAS ─────────────── */
 function GpsAlertas({ data, setPage }) {
   const [tab, setTab] = useState("empresas"); // "empresas" | "maquinas"
   const [search, setSearch] = useState("");
@@ -3683,6 +3960,12 @@ function GpsAlertas({ data, setPage }) {
         <h2 style={{ color:"#10b981", margin:"0 0 4px", fontSize:22, fontWeight:900 }}>📡 GPS & Alertas</h2>
         <p style={{ color:"#6b7280", fontSize:13, margin:0 }}>Monitoreo de flota y maquinaria pesada</p>
       </div>
+
+      {/* Botón Informe de Flotas */}
+      <button onClick={() => setPage("informe-flotas")}
+        style={{ width:"100%", padding:"14px", marginBottom:16, background:"linear-gradient(135deg,#f59e0b,#d97706)", border:"none", borderRadius:14, color:"#fff", fontWeight:900, fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
+        📋 Informe de Flotas
+      </button>
 
       {/* Resumen global */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:16 }}>
@@ -3887,7 +4170,7 @@ function App() {
       {page === "companies"      && <Companies data={data} setPage={setPage} setSelectedCompany={setSelectedCompany}/>}
       {page === "new-company"    && <NewCompany setPage={setPage}/>}
       {page === "company-detail" && (selectedCompany
-        ? <CompanyDetail company={selectedCompany} data={data} setPage={setPage} setSelectedCompany={setSelectedCompany} setSelectedVehicle={setSelectedVehicle}/>
+        ? <CompanyDetail company={selectedCompany} data={data} setPage={setPage} setSelectedCompany={setSelectedCompany} setSelectedVehicle={setSelectedVehicle} setSelectedMaquina={setSelectedMaquina}/>
         : <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"#6b7280" }}><span style={{ fontSize:48 }}>🏢</span><span style={{ fontSize:15 }}>Seleccioná una empresa desde el listado.</span><button onClick={() => setPage("companies")} style={{ marginTop:8, padding:"10px 24px", borderRadius:12, background:"#3b82f622", border:"1px solid #3b82f644", color:"#60a5fa", fontWeight:700, cursor:"pointer" }}>← Ir a Empresas</button></div>
       )}
       {page === "vehicle-detail" && (selectedVehicle
@@ -3896,6 +4179,7 @@ function App() {
       )}
       {page === "repairs"        && <RepairsPage data={data} setPage={setPage}/>}
       {page === "gps"            && <GpsAlertas data={data} setPage={setPage}/>}
+      {page === "informe-flotas" && <InformeFlotas data={data} setPage={setPage}/>}
       {page === "checks"         && <Checks data={data} setPage={setPage} preselectedClientId={checkPreselectedClientId}/>}
       {page === "maquinaria"     && <MaquinariaList data={data} setPage={setPage} setSelectedMaquina={setSelectedMaquina}/>}
       {page === "new-maquina"    && <NewMaquina setPage={setPage} data={data}/>}

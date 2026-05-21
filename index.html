@@ -864,6 +864,11 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
     window.open("https://wa.me/" + tel + "?text=" + encodeURIComponent(msg), "_blank");
   }
 
+  async function deleteCheck(checkId) {
+    if (!confirm("¿Eliminar este chequeo?")) return;
+    await fbDelete("checks", checkId);
+  }
+
   async function deleteClient() {
     if (!confirm(`¿Eliminar a ${client.name}?`)) return;
     for (const ch of clientChecks) await fbDelete("checks", ch.id);
@@ -991,6 +996,9 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
                     </button>
                     <button onClick={() => copiarInforme(ch)} style={{ padding:"10px 12px", borderRadius:12, background:"#2a2a2a", border:"1px solid #3a3a3a", color:"#9ca3af", fontWeight:700, fontSize:13, cursor:"pointer" }}>
                       📋
+                    </button>
+                    <button onClick={() => deleteCheck(ch.id)} style={{ padding:"10px 12px", borderRadius:12, background:"transparent", border:"1px solid #ef444433", color:"#ef4444", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                      🗑️
                     </button>
                   </div>
                 </div>
@@ -1596,6 +1604,11 @@ function VehicleDetail({ vehicle, data, setPage }) {
     navigator.clipboard.writeText(msg).then(() => alert("✅ Informe copiado")).catch(() => alert("No se pudo copiar"));
   }
 
+  async function deleteVehicleCheck(checkId) {
+    if (!confirm("¿Eliminar este chequeo?")) return;
+    await fbDelete("checks", checkId);
+  }
+
   return (
     <div style={{ padding:"16px 16px 100px" }}>
       <button onClick={() => setPage("company-detail")} style={{ background:"none", border:"none", color:"#60a5fa", cursor:"pointer", fontSize:14, fontWeight:700, marginBottom:16, padding:0 }}>← Volver</button>
@@ -1681,6 +1694,9 @@ function VehicleDetail({ vehicle, data, setPage }) {
                     <button onClick={() => copiarInforme(ch)} style={{ padding:"10px 12px", borderRadius:12, background:"#2a2a2a", border:"1px solid #3a3a3a", color:"#9ca3af", fontWeight:700, fontSize:13, cursor:"pointer" }}>
                       📋
                     </button>
+                    <button onClick={() => deleteVehicleCheck(ch.id)} style={{ padding:"10px 12px", borderRadius:12, background:"transparent", border:"1px solid #ef444433", color:"#ef4444", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                      🗑️
+                    </button>
                   </div>
                 </div>
               );
@@ -1727,6 +1743,74 @@ function VehicleDetail({ vehicle, data, setPage }) {
 }
 
 /* ─────────────── TRAILER HISTORIAL ─────────────── */
+function exportarPDFTrailer(entry) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+  const W = 210, M = 14;
+  let y = 14;
+  doc.setDrawColor(249,115,22); doc.setLineWidth(0.8);
+  doc.line(M, y+10, W-M, y+10);
+  doc.setFontSize(20); doc.setFont("helvetica","bold"); doc.setTextColor(249,115,22);
+  doc.text("ASN", M, y+7);
+  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+  doc.text("Control y Prevenci\xF3n Vehicular", M+16, y+4);
+  doc.setFontSize(8); doc.setTextColor(55,65,81); doc.text("Informe de Trailer", M+16, y+8.5);
+  doc.setFontSize(8); doc.setTextColor(107,114,128);
+  doc.text("Fecha: " + new Date(entry.fecha||entry.createdAt).toLocaleDateString("es-AR") + (entry.perito ? "   Perito: " + entry.perito : ""), W-M, y+4, { align:"right" });
+  y += 16;
+  const estadoColors = { ok:[16,185,129], critico:[239,68,68], prevencion:[245,158,11], solicitar:[96,165,250], no:[107,114,128] };
+  const rows = TRAILER_CHECK_ITEMS.map(function(item) {
+    const e = (entry.estados||{})[item.id];
+    const est = ESTADOS.find(function(x) { return x.id === e; });
+    return [item.label, est ? est.label : "\u2014", e || ""];
+  });
+  doc.autoTable({
+    startY: y, head:[["🚐  Ítems del Trailer", "Estado"]], body: rows.map(function(r) { return [r[0], r[1]]; }),
+    theme:"striped", styles:{ fontSize:8, cellPadding:2, textColor:[55,65,81], fillColor:[255,255,255] },
+    headStyles:{ fillColor:[243,244,246], textColor:[55,65,81], fontStyle:"bold", fontSize:8 },
+    columnStyles:{ 0:{ cellWidth:"auto" }, 1:{ cellWidth:26, halign:"right" } },
+    margin:{ left:M, right:M },
+    didParseCell: function(data) {
+      if (data.column.index === 1 && data.section === "body") {
+        const col = estadoColors[rows[data.row.index] && rows[data.row.index][2]] || [107,114,128];
+        data.cell.styles.textColor = col; data.cell.styles.fontStyle = "bold";
+      }
+    },
+  });
+  y = doc.lastAutoTable.finalY + 6;
+  if (entry.observaciones) {
+    const lines = doc.splitTextToSize(entry.observaciones, W-M*2-6);
+    doc.setFillColor(255,251,235); doc.setDrawColor(252,211,77); doc.setLineWidth(0.3);
+    doc.roundedRect(M, y, W-M*2, lines.length*4+10, 2, 2, "FD");
+    doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(146,64,14);
+    doc.text("Observaciones", M+3, y+5);
+    doc.setFont("helvetica","normal"); doc.setTextColor(92,64,14);
+    doc.text(lines, M+3, y+10);
+  }
+  const pageH = doc.internal.pageSize.getHeight();
+  doc.setDrawColor(249,115,22); doc.setLineWidth(0.5);
+  doc.line(M, pageH-12, W-M, pageH-12);
+  doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+  doc.text("ASN \xB7 Control y Prevenci\xF3n Vehicular", M, pageH-7);
+  doc.text("Generado: " + new Date().toLocaleDateString("es-AR"), W-M, pageH-7, { align:"right" });
+  doc.save("ASN_Trailer_" + new Date(entry.fecha||entry.createdAt).toLocaleDateString("es-AR").replace(/\//g,"-") + ".pdf");
+}
+
+function generarWppTrailer(entry) {
+  const crit2 = TRAILER_CHECK_ITEMS.filter(i => (entry.estados||{})[i.id] === "critico").map(i => i.label);
+  const prev2 = TRAILER_CHECK_ITEMS.filter(i => (entry.estados||{})[i.id] === "prevencion").map(i => i.label);
+  const ok2 = TRAILER_CHECK_ITEMS.filter(i => (entry.estados||{})[i.id] === "ok").length;
+  let msg = "🚐 *INFORME DE TRAILER*\n*ASN · Control y Prevención Vehicular*\n━━━━━━━━━━━━━━━━━━━━\n\n";
+  msg += "📅 *Fecha:* " + new Date(entry.fecha||entry.createdAt).toLocaleDateString("es-AR") + "\n";
+  if (entry.perito) msg += "👷 *Perito:* " + entry.perito + "\n";
+  msg += "\n━━━━━━━━━━━━━━━━━━━━\n✅ Ítems OK: *" + ok2 + "/" + TRAILER_CHECK_ITEMS.length + "*\n━━━━━━━━━━━━━━━━━━━━\n\n";
+  if (crit2.length > 0) { msg += "🔴 *CRÍTICO:*\n"; crit2.forEach(function(i) { msg += "  • " + i + "\n"; }); msg += "\n"; }
+  if (prev2.length > 0) { msg += "🟡 *PREVENCIÓN:*\n"; prev2.forEach(function(i) { msg += "  • " + i + "\n"; }); msg += "\n"; }
+  if (entry.observaciones) msg += "📝 *Observaciones:*\n" + entry.observaciones + "\n\n";
+  msg += "━━━━━━━━━━━━━━━━━━━━\n_ASN · Control y Prevención Vehicular_";
+  return msg;
+}
+
 function TrailerHistorial({ entity, tipo, onSave, onAddHistorial, onDeleteHistorial }) {
   const trailerCheck = entity.trailerCheck || {};
   const historial = entity.trailerHistorial || [];
@@ -1852,7 +1936,7 @@ function TrailerHistorial({ entity, tipo, onSave, onAddHistorial, onDeleteHistor
           Historial de trailers ({historial.length})
         </h3>
         {!showForm && (
-          <button onClick={() => setShowForm(true)}
+          <button onClick={() => { setEntryForm(f => ({...f, estados:{...trailerCheck}})); setShowForm(true); }}
             style={{ padding:"8px 14px", borderRadius:10, background:"#f59e0b22", border:"1px solid #f59e0b44", color:"#f59e0b", fontWeight:700, fontSize:12, cursor:"pointer" }}>
             + Nuevo chequeo
           </button>
@@ -1951,10 +2035,21 @@ function TrailerHistorial({ entity, tipo, onSave, onAddHistorial, onDeleteHistor
                   📝 {entry.observaciones}
                 </div>
               )}
-              <button onClick={() => { if(confirm("¿Eliminar este chequeo?")) onDeleteHistorial(origIdx); }}
-                style={{ marginTop:10, padding:"6px 12px", borderRadius:8, background:"transparent", border:"1px solid #ef444433", color:"#ef4444", fontWeight:700, fontSize:11, cursor:"pointer" }}>
-                🗑️ Eliminar
-              </button>
+              <div style={{ display:"flex", gap:6, marginTop:10 }}>
+                <button onClick={() => {
+                  const msg = generarWppTrailer(entry);
+                  window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank");
+                }} style={{ flex:1, padding:"7px 8px", borderRadius:8, background:"linear-gradient(135deg,#25d366,#128c7e)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                  💬 WhatsApp
+                </button>
+                <button onClick={() => exportarPDFTrailer(entry)} style={{ flex:1, padding:"7px 8px", borderRadius:8, background:"linear-gradient(135deg,#ef4444,#dc2626)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                  📄 PDF
+                </button>
+                <button onClick={() => { if(confirm("¿Eliminar este chequeo?")) onDeleteHistorial(origIdx); }}
+                  style={{ padding:"7px 12px", borderRadius:8, background:"transparent", border:"1px solid #ef444433", color:"#ef4444", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                  🗑️
+                </button>
+              </div>
             </div>
           );
         })
@@ -2224,7 +2319,6 @@ function Checks({ data, setPage, preselectedClientId }) {
     setSaved(true);
     setItemStates(buildInitialItems()); setClientId(""); setCompanyId(""); setVehicleId(""); setPerito(""); setKms(""); setNroMovil(""); setDetalle(""); setRecomendaciones("");
     setTimeout(() => setSaved(false), 2000);
-    setWasPreselected(!!preselectedClientId);
   }
 
   const allItems = CHECK_SECTIONS.flatMap(s => s.items);
@@ -2232,15 +2326,13 @@ function Checks({ data, setPage, preselectedClientId }) {
   const okItems = allItems.filter(i => itemStates[i.id] === "ok").length;
   const criticoItems = allItems.filter(i => itemStates[i.id] === "critico").length;
 
-  const [wasPreselected] = useState(false);
-
   if (saved) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"80vh", gap:16, padding:24 }}>
       <div style={{ fontSize:64 }}>✅</div>
       <div style={{ color:"#10b981", fontWeight:900, fontSize:20 }}>Chequeo guardado</div>
-      <button onClick={() => setPage("client-detail")}
+      <button onClick={() => setPage(mode === "company" ? "company-detail" : "client-detail")}
         style={{ marginTop:8, padding:"12px 28px", borderRadius:12, background:"#f9731622", border:"1px solid #f9731644", color:"#f97316", fontWeight:700, fontSize:14, cursor:"pointer" }}>
-        ← Volver al cliente
+        ← Volver
       </button>
       <button onClick={() => setPage("clients")}
         style={{ padding:"10px 20px", borderRadius:12, background:"transparent", border:"1px solid #333", color:"#6b7280", fontWeight:600, fontSize:13, cursor:"pointer" }}>
@@ -2412,6 +2504,47 @@ function Checks({ data, setPage, preselectedClientId }) {
           })}
         </div>
       ))}
+
+      {/* Trailer del vehículo seleccionado */}
+      {(() => {
+        // Obtener la entidad seleccionada para ver su trailer
+        let selectedEntity = null;
+        if (mode === "client" && clientId) {
+          selectedEntity = data.clients.find(c => c.id === clientId);
+        } else if (mode === "company" && vehicleId) {
+          const comp = data.companies.find(c => c.id === companyId);
+          selectedEntity = comp ? (comp.vehicles||[]).find(v => v.id === vehicleId) : null;
+        }
+        if (!selectedEntity) return null;
+        const tieneTrailer = selectedEntity.tieneTrailer;
+        const trailerCheck = selectedEntity.trailerCheck || {};
+        return (
+          <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, marginBottom:12, border:`1px solid ${tieneTrailer ? "#f9731644" : "#2a2a2a"}` }}>
+            <h3 style={{ color: tieneTrailer ? "#f97316" : "#4b5563", margin:"0 0 10px", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>
+              🚐 Estado del Trailer
+            </h3>
+            {!tieneTrailer ? (
+              <div style={{ color:"#6b7280", fontSize:13, fontStyle:"italic" }}>No posee trailer</div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {TRAILER_CHECK_ITEMS.map(item => {
+                  const estadoId = trailerCheck[item.id];
+                  const est = ESTADOS.find(e => e.id === estadoId);
+                  return (
+                    <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <span style={{ color:"#9ca3af", fontSize:12 }}>{item.label}</span>
+                      {est
+                        ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}44` }}>{est.label}</span>
+                        : <span style={{ color:"#3a3a3a", fontSize:11 }}>—</span>
+                      }
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Detalle y recomendaciones */}
       <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, marginBottom:12, border:"1px solid #2a2a2a" }}>
@@ -3060,11 +3193,14 @@ function MaquinaCheckForm({ maquina, onSave, onCancel }) {
 function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
   const [showCheckForm, setShowCheckForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showRepairForm, setShowRepairForm] = useState(false);
+  const [tab, setTab] = useState("chequeos"); // "chequeos" | "reparaciones"
 
   // Leer la versión más fresca de la cantera desde Firebase
   const freshMaquina = (data.maquinas||[]).find(m => m.id === maquina.id) || maquina;
   const checks = [...(freshMaquina.checks||[])].sort((a,b) => b.createdAt - a.createdAt);
   const tipo = MAQUINA_TIPOS.find(t => t.id === freshMaquina.tipo);
+  const repairs = freshMaquina.repairs || [];
 
   async function saveCheck(checkData) {
     setSaving(true);
@@ -3072,6 +3208,165 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
     await fbUpdate("maquinas", freshMaquina.id, { checks: updated });
     setShowCheckForm(false);
     setSaving(false);
+  }
+
+  async function deleteCheck(createdAt) {
+    if (!confirm("¿Eliminar este chequeo?")) return;
+    const updated = (freshMaquina.checks||[]).filter(ch => ch.createdAt !== createdAt);
+    await fbUpdate("maquinas", freshMaquina.id, { checks: updated });
+  }
+
+  async function addRepair(repData) {
+    const updated = [...repairs, repData];
+    await fbUpdate("maquinas", freshMaquina.id, { repairs: updated });
+    setShowRepairForm(false);
+  }
+
+  async function deleteRepair(idx) {
+    const updated = repairs.filter((_, i) => i !== idx);
+    await fbUpdate("maquinas", freshMaquina.id, { repairs: updated });
+  }
+
+  async function toggleRepairEstado(idx, newEstado) {
+    const updated = repairs.map((r, i) => i === idx ? { ...r, estado: newEstado } : r);
+    await fbUpdate("maquinas", freshMaquina.id, { repairs: updated });
+  }
+
+  function shareRepair(r) {
+    const cat = REPAIR_CATS.find(c => c.id === r.categoria);
+    const msg = `🔧 *REPARACIÓN — ASN Control Vehicular*\n` +
+      `🏗️ Máquina: ${freshMaquina.nombre || tipo?.label}\n` +
+      (freshMaquina.cantera ? `⛏️ Cantera: ${freshMaquina.cantera}\n` : "") +
+      (freshMaquina.dominio ? `🔖 Dominio: ${freshMaquina.dominio}\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📋 ${r.descripcion}\n` +
+      `📂 Categoría: ${cat?.label || r.categoria}\n` +
+      `📅 Fecha: ${new Date(r.createdAt).toLocaleDateString("es-AR")}\n` +
+      `💰 Costo: ${formatMoney(r.costo)}\n` +
+      (r.taller ? `🏪 Taller: ${r.taller}\n` : "") +
+      (r.notas ? `📝 Notas: ${r.notas}\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━\n_ASN · Control y Prevención Vehicular_`;
+    let tel = (freshMaquina.phone||"").replace(/\D/g, "");
+    const url = tel ? `https://wa.me/54${tel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank");
+  }
+
+  function enviarWppCheck(ch, idx) {
+    const allItems = MAQUINA_CHECK_SECTIONS.flatMap(s => s.items);
+    const estados = ch.itemStates || {};
+    const criticos = allItems.filter(i => estados[i.id] === "critico").map(i => i.label);
+    const prevencion = allItems.filter(i => estados[i.id] === "prevencion").map(i => i.label);
+    const okCount = allItems.filter(i => estados[i.id] === "ok").length;
+    const fecha = new Date(ch.createdAt).toLocaleDateString("es-AR");
+    let msg = `🏗️ *INFORME DE MAQUINARIA*\n*ASN · Control y Prevención Vehicular*\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `🏗️ *Máquina:* ${freshMaquina.nombre || tipo?.label}\n`;
+    if (freshMaquina.cantera) msg += `⛏️ *Cantera:* ${freshMaquina.cantera}\n`;
+    if (freshMaquina.dominio) msg += `🔖 *Dominio:* ${freshMaquina.dominio}\n`;
+    msg += `📅 *Fecha:* ${fecha}\n`;
+    if (ch.perito) msg += `👷 *Perito:* ${ch.perito}\n`;
+    if (ch.horasMotor) msg += `⏱️ *Horas de motor:* ${ch.horasMotor} hs\n`;
+    msg += `\n━━━━━━━━━━━━━━━━━━━━\n✅ Ítems OK: *${okCount}/${allItems.length}*\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+    if (criticos.length > 0) { msg += `🔴 *CRÍTICO — Atención inmediata:*\n`; criticos.forEach(i => { msg += `  • ${i}\n`; }); msg += `\n`; }
+    if (prevencion.length > 0) { msg += `🟡 *PREVENCIÓN — Seguimiento:*\n`; prevencion.forEach(i => { msg += `  • ${i}\n`; }); msg += `\n`; }
+    if (ch.recomendaciones) { msg += `━━━━━━━━━━━━━━━━━━━━\n💡 *Recomendaciones:*\n${ch.recomendaciones}\n\n`; }
+    msg += `━━━━━━━━━━━━━━━━━━━━\n_ASN · Control y Prevención Vehicular_`;
+    let tel = (freshMaquina.phone||"").replace(/\D/g,"");
+    const url = tel ? `https://wa.me/54${tel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank");
+  }
+
+  function exportarPDFMaquina(ch) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+    const allItems = MAQUINA_CHECK_SECTIONS.flatMap(s => s.items);
+    const estados = ch.itemStates || {};
+    const fecha = new Date(ch.createdAt).toLocaleDateString("es-AR");
+    const okCount = allItems.filter(i => estados[i.id] === "ok").length;
+    const criticoItems = allItems.filter(i => estados[i.id] === "critico");
+    const pct = Math.round((okCount / allItems.length) * 100);
+    const barColor = criticoItems.length > 0 ? [239,68,68] : pct >= 80 ? [16,185,129] : [245,158,11];
+    const W = 210, M = 14;
+    let y = 14;
+    doc.setDrawColor(167,139,250); doc.setLineWidth(0.8);
+    doc.line(M, y + 10, W - M, y + 10);
+    doc.setFontSize(20); doc.setFont("helvetica","bold"); doc.setTextColor(167,139,250);
+    doc.text("ASN", M, y + 7);
+    doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+    doc.text("Control y Prevención Vehicular", M + 16, y + 4);
+    doc.setFontSize(8); doc.setTextColor(55,65,81);
+    doc.text("Informe de Maquinaria Pesada", M + 16, y + 8.5);
+    doc.setFontSize(8); doc.setTextColor(107,114,128);
+    doc.text("Fecha: " + fecha + (ch.perito ? "   Perito: " + ch.perito : ""), W - M, y + 4, { align:"right" });
+    y += 16;
+    let infoBody = [["Máquina", freshMaquina.nombre || tipo?.label || "—"]];
+    if (freshMaquina.cantera)  infoBody.push(["Cantera",  freshMaquina.cantera]);
+    if (freshMaquina.dominio)  infoBody.push(["Dominio",  freshMaquina.dominio]);
+    if (freshMaquina.nroSerie) infoBody.push(["N° Serie", freshMaquina.nroSerie]);
+    if (ch.horasMotor)         infoBody.push(["Horas motor", ch.horasMotor + " hs"]);
+    doc.autoTable({ startY: y, body: infoBody, theme:"plain", styles:{ fontSize:9, cellPadding:2.5, textColor:[55,65,81] }, columnStyles:{ 0:{ fontStyle:"bold", textColor:[107,114,128], cellWidth:35 }, 1:{ textColor:[17,24,39] } }, margin:{ left:M, right:M } });
+    y = doc.lastAutoTable.finalY + 5;
+    const cards = [
+      { val:okCount,              label:"OK",         color:[16,185,129] },
+      { val:criticoItems.length,  label:"Críticos",   color:[239,68,68]  },
+      { val:allItems.filter(i=>estados[i.id]==="prevencion").length, label:"Prevención", color:[245,158,11] },
+    ];
+    const cardW = (W - M*2 - 6) / 3;
+    cards.forEach((c, i) => {
+      const cx = M + i*(cardW+3);
+      doc.setFillColor(249,250,251); doc.setDrawColor(229,231,235); doc.setLineWidth(0.3);
+      doc.roundedRect(cx, y, cardW, 16, 2, 2, "FD");
+      doc.setFontSize(14); doc.setFont("helvetica","bold"); doc.setTextColor(...c.color);
+      doc.text(String(c.val), cx + cardW/2, y+9, { align:"center" });
+      doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+      doc.text(c.label, cx + cardW/2, y+14, { align:"center" });
+    });
+    y += 20;
+    doc.setFillColor(229,231,235); doc.roundedRect(M, y, W-M*2, 4, 2, 2, "F");
+    doc.setFillColor(...barColor); doc.roundedRect(M, y, (W-M*2)*pct/100, 4, 2, 2, "F");
+    y += 8;
+    const estadoColors = { ok:[16,185,129], critico:[239,68,68], prevencion:[245,158,11], solicitar:[96,165,250], no:[107,114,128] };
+    MAQUINA_CHECK_SECTIONS.forEach(sec => {
+      const rows = sec.items.map(item => {
+        const e = estados[item.id];
+        const est = ESTADOS.find(x => x.id === e);
+        return [item.label, est ? est.label : "—", e || ""];
+      });
+      doc.autoTable({
+        startY: y, head:[[sec.icon + "  " + sec.title, "Estado"]], body: rows.map(r => [r[0], r[1]]),
+        theme:"striped", styles:{ fontSize:8, cellPadding:2, textColor:[55,65,81], fillColor:[255,255,255] },
+        headStyles:{ fillColor:[243,244,246], textColor:[55,65,81], fontStyle:"bold", fontSize:8 },
+        alternateRowStyles:{ fillColor:[249,250,251] },
+        columnStyles:{ 0:{ cellWidth:"auto" }, 1:{ cellWidth:26, halign:"right" } },
+        margin:{ left:M, right:M },
+        didParseCell(data) {
+          if (data.column.index === 1 && data.section === "body") {
+            const stateKey = rows[data.row.index]?.[2];
+            const col = estadoColors[stateKey] || [107,114,128];
+            data.cell.styles.textColor = col;
+            data.cell.styles.fontStyle = "bold";
+          }
+        },
+      });
+      y = doc.lastAutoTable.finalY + 3;
+    });
+    if (ch.recomendaciones) {
+      const lines = doc.splitTextToSize(ch.recomendaciones, W-M*2-6);
+      doc.setFillColor(255,251,235); doc.setDrawColor(252,211,77); doc.setLineWidth(0.3);
+      doc.roundedRect(M, y, W-M*2, lines.length*4+10, 2, 2, "FD");
+      doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(146,64,14);
+      doc.text("Recomendaciones", M+3, y+5);
+      doc.setFont("helvetica","normal"); doc.setTextColor(92,64,14);
+      doc.text(lines, M+3, y+10);
+      y += lines.length*4+14;
+    }
+    const pageH = doc.internal.pageSize.getHeight();
+    doc.setDrawColor(167,139,250); doc.setLineWidth(0.5);
+    doc.line(M, pageH-12, W-M, pageH-12);
+    doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+    doc.text("ASN \xB7 Control y Prevenci\xF3n Vehicular", M, pageH-7);
+    doc.text("Generado: " + new Date().toLocaleDateString("es-AR"), W-M, pageH-7, { align:"right" });
+    const nombre = "ASN_Maquina_" + (freshMaquina.dominio || freshMaquina.nombre || "maquina").replace(/\s/g,"_") + "_" + fecha.replace(/\//g,"-") + ".pdf";
+    doc.save(nombre);
   }
 
   async function deleteMaquina() {
@@ -3139,19 +3434,29 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
       </div>
 
       {/* Botón nuevo chequeo */}
-      {!showCheckForm && (
+      {!showCheckForm && tab === "chequeos" && (
         <button onClick={() => setShowCheckForm(true)}
           style={{ width:"100%", padding:"14px", background:"linear-gradient(135deg,#7c3aed,#6d28d9)", border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:15, marginBottom:16 }}>
           + Nuevo chequeo de máquina
         </button>
       )}
 
+      {/* Tabs */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
+        <button onClick={() => { setTab("chequeos"); setShowCheckForm(false); }} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`2px solid ${tab==="chequeos" ? "#a78bfa" : "#2a2a2a"}`, background: tab==="chequeos" ? "#a78bfa22" : "#111", color: tab==="chequeos" ? "#a78bfa" : "#6b7280", fontWeight:700, fontSize:13 }}>
+          ✅ Chequeos ({checks.length})
+        </button>
+        <button onClick={() => { setTab("reparaciones"); setShowCheckForm(false); }} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`2px solid ${tab==="reparaciones" ? "#7c3aed" : "#2a2a2a"}`, background: tab==="reparaciones" ? "#7c3aed22" : "#111", color: tab==="reparaciones" ? "#a78bfa" : "#6b7280", fontWeight:700, fontSize:13 }}>
+          🔧 Reparaciones ({repairs.length})
+        </button>
+      </div>
+
       {showCheckForm && (
         <MaquinaCheckForm maquina={freshMaquina} onSave={saveCheck} onCancel={() => setShowCheckForm(false)}/>
       )}
 
       {/* Historial de chequeos */}
-      {!showCheckForm && (
+      {!showCheckForm && tab === "chequeos" && (
         <>
           <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", marginBottom:12 }}>
             Historial ({checks.length})
@@ -3162,7 +3467,7 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
                 const h = getHealth(ch);
                 const fecha = new Date(ch.createdAt).toLocaleDateString("es-AR");
                 return (
-                  <div key={idx} style={{ background:"#1a1a1a", borderRadius:14, padding:14, border:`1px solid ${h.color}33`, marginBottom:10 }}>
+                  <div key={ch.createdAt} style={{ background:"#1a1a1a", borderRadius:14, padding:14, border:`1px solid ${h.color}33`, marginBottom:10 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                       <span style={{ color:"#9ca3af", fontSize:13 }}>📅 {fecha}</span>
                       <span style={{ color:h.color, fontWeight:900, fontSize:14 }}>{h.pct}% OK</span>
@@ -3182,15 +3487,40 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
                         💡 {ch.recomendaciones}
                       </div>
                     )}
+                    <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                      <button onClick={() => enviarWppCheck(ch, idx)} style={{ flex:1, padding:"9px 6px", borderRadius:10, background:"linear-gradient(135deg,#25d366,#128c7e)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                        💬 WhatsApp
+                      </button>
+                      <button onClick={() => exportarPDFMaquina(ch)} style={{ flex:1, padding:"9px 6px", borderRadius:10, background:"linear-gradient(135deg,#ef4444,#dc2626)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                        📄 PDF
+                      </button>
+                      <button onClick={() => deleteCheck(ch.createdAt)} style={{ padding:"9px 12px", borderRadius:10, background:"transparent", border:"1px solid #ef444433", color:"#ef4444", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                 );
               })
           }
-          <button onClick={deleteMaquina} style={{ width:"100%", marginTop:8, padding:"14px", background:"#1a1a1a", border:"1px solid #ef444444", color:"#ef4444", borderRadius:14, cursor:"pointer", fontWeight:700, fontSize:14 }}>
-            🗑️ Eliminar máquina
-          </button>
         </>
       )}
+
+      {/* Reparaciones */}
+      {tab === "reparaciones" && (
+        <>
+          <RepairStats repairs={repairs}/>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+            <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", margin:0 }}>Historial de Reparaciones</h3>
+            {!showRepairForm && <button onClick={() => setShowRepairForm(true)} style={{ padding:"8px 14px", borderRadius:10, background:"#7c3aed22", border:"1px solid #7c3aed44", color:"#a78bfa", fontWeight:700, fontSize:12, cursor:"pointer" }}>+ Agregar</button>}
+          </div>
+          {showRepairForm && <RepairForm onSave={addRepair} onCancel={() => setShowRepairForm(false)}/>}
+          <RepairList repairs={repairs} onDelete={deleteRepair} onShare={shareRepair} onToggleEstado={toggleRepairEstado}/>
+        </>
+      )}
+
+      <button onClick={deleteMaquina} style={{ width:"100%", marginTop:8, padding:"14px", background:"#1a1a1a", border:"1px solid #ef444444", color:"#ef4444", borderRadius:14, cursor:"pointer", fontWeight:700, fontSize:14 }}>
+        🗑️ Eliminar máquina
+      </button>
     </div>
   );
 }

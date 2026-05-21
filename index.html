@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-  <meta name="theme-color" content="#0d0d0d"/>
+  <meta name="theme-color" content="#080808"/>
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -12,16 +12,28 @@
   <link rel="manifest" href="manifest.json"/>
   <link rel="apple-touch-icon" href="icon-192.png"/>
   <title>ASN · Control Vehicular</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
+    :root {
+      --orange:#f97316; --orange-dim:#ea580c; --orange-hot:#fb923c;
+      --bg:#080808; --bg2:#0f0f0f; --bg3:#141414;
+      --surface:#1a1a1a; --surface2:#212121;
+      --border:#252525; --border2:#303030;
+      --text:#e8eaed; --muted:#6b7280; --muted2:#4b5563;
+      --green:#10b981; --red:#ef4444; --blue:#60a5fa; --yellow:#f59e0b; --purple:#a78bfa;
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; }
-    body { background: #0d0d0d; color: #e5e7eb; font-family: 'Segoe UI', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); font-family: 'Barlow', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
     input, select, textarea, button { font-family: inherit; }
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: #111; }
-    ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-
-    /* ── PDF PRINT STYLES ── */
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+    button { cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+    button:active { opacity: 0.85; transform: scale(0.98); }
+    @keyframes pulse-bar { 0%,100%{opacity:0.5;transform:scaleX(0.5)} 50%{opacity:1;transform:scaleX(1)} }
+    @keyframes fadeSlideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    .animate-in { animation: fadeSlideIn 0.2s ease forwards; }
     @media print {
       body { background: #fff !important; color: #000 !important; font-size: 12px; }
       #root { display: none !important; }
@@ -74,7 +86,7 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) { console.error("ASN Error:", error, info); }
   render() {
     if (this.state.error) return (
-      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", gap:16, background:"#0d0d0d", padding:24 }}>
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", gap:16, background:"#060606", padding:24 }}>
         <div style={{ fontSize:48 }}>⚠️</div>
         <div style={{ color:"#ef4444", fontWeight:900, fontSize:18, textAlign:"center" }}>Ocurrió un error</div>
         <div style={{ color:"#6b7280", fontSize:13, textAlign:"center", maxWidth:300 }}>{String(this.state.error.message || this.state.error)}</div>
@@ -334,12 +346,12 @@ function Nav({ page, setPage }) {
     { id: "gps",        icon: "📡", label: "GPS" },
   ];
   return (
-    <nav style={{ position:"fixed", bottom:0, left:0, right:0, zIndex:100, background:"#0d0d0d", borderTop:"1px solid #1f1f1f", display:"flex", justifyContent:"space-around", padding:"8px 0 env(safe-area-inset-bottom, 12px)", boxShadow:"0 -4px 20px rgba(0,0,0,0.5)" }}>
+    <nav style={{ position:"fixed", bottom:0, left:0, right:0, zIndex:100, background:"rgba(9,9,9,0.97)", borderTop:"1px solid rgba(249,115,22,0.12)", backdropFilter:"blur(12px)", display:"flex", justifyContent:"space-around", padding:"8px 0 env(safe-area-inset-bottom, 12px)", boxShadow:"0 -1px 0 rgba(249,115,22,0.08), 0 -8px 32px rgba(0,0,0,0.8)" }}>
       {items.map(i => (
-        <button key={i.id} onClick={() => setPage(i.id)} style={{ background:"none", border:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:2, color: page===i.id ? "#f97316" : "#4b5563", padding:"4px 10px", transition:"color 0.15s" }}>
-          <span style={{ fontSize:20 }}>{i.icon}</span>
-          <span style={{ fontSize:9, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{i.label}</span>
-          {page===i.id && <span style={{ width:20, height:2.5, borderRadius:2, background:"linear-gradient(90deg,#f97316,#ea580c)", marginTop:2 }}/>}
+        <button key={i.id} onClick={() => setPage(i.id)} style={{ background:"none", border:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3, color: page===i.id ? "#f97316" : "#3a3f4a", padding:"4px 10px", transition:"color 0.2s", position:"relative" }}>
+          <span style={{ fontSize:19, filter: page===i.id ? "drop-shadow(0 0 6px rgba(249,115,22,0.5))" : "none", transition:"filter 0.2s" }}>{i.icon}</span>
+          <span style={{ fontSize:8, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", fontFamily:"'Barlow Condensed',sans-serif" }}>{i.label}</span>
+          {page===i.id && <span style={{ position:"absolute", bottom:-2, width:24, height:2, borderRadius:2, background:"linear-gradient(90deg,#f97316,#ea580c)", boxShadow:"0 0 8px rgba(249,115,22,0.6)" }}/>}
         </button>
       ))}
     </nav>
@@ -349,11 +361,12 @@ function Nav({ page, setPage }) {
 /* ─────────────── DASHBOARD ─────────────── */
 function StatCard({ icon, value, label, color, sub }) {
   return (
-    <div style={{ background:"#1a1a1a", borderRadius:16, padding:"16px 14px", border:`1px solid ${color}33`, position:"relative", overflow:"hidden" }}>
-      <div style={{ position:"absolute", top:-10, right:-10, fontSize:54, opacity:0.07 }}>{icon}</div>
-      <div style={{ fontSize:30, fontWeight:900, color, marginBottom:2 }}>{value}</div>
-      <div style={{ color:"#6b7280", fontSize:11, fontWeight:600, letterSpacing:"0.05em", textTransform:"uppercase" }}>{label}</div>
-      {sub && <div style={{ color:"#4b5563", fontSize:10, marginTop:4 }}>{sub}</div>}
+    <div style={{ background:"linear-gradient(145deg,#1c1c1c,#161616)", borderRadius:16, padding:"16px 14px", border:`1px solid ${color}28`, position:"relative", overflow:"hidden", boxShadow:`0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.03)` }}>
+      <div style={{ position:"absolute", top:-8, right:-8, fontSize:50, opacity:0.06, filter:"grayscale(0.3)" }}>{icon}</div>
+      <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:`linear-gradient(90deg, transparent, ${color}60, transparent)`, borderRadius:"16px 16px 0 0" }}/>
+      <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:32, fontWeight:900, color, marginBottom:2, lineHeight:1, letterSpacing:"-0.02em" }}>{value}</div>
+      <div style={{ color:"#4b5563", fontSize:10, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase" }}>{label}</div>
+      {sub && <div style={{ color:"#374151", fontSize:10, marginTop:5, fontWeight:500 }}>{sub}</div>}
     </div>
   );
 }
@@ -409,12 +422,15 @@ function Dashboard({ data, setPage }) {
   }
 
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
-      <p style={{ color:"#6b7280", margin:0, fontSize:13 }}>Bienvenido al panel</p>
-      <h2 style={{ color:"#f0f2f5", margin:"4px 0 20px", fontSize:22, fontWeight:900, fontFamily:"'Arial Black',sans-serif" }}>
-        <span style={{ color:"#d4d8de" }}>AS</span><span style={{ color:"#f97316" }}>N</span>
-        <span style={{ color:"#6b7280", fontSize:14, fontWeight:400, fontFamily:"'Segoe UI',sans-serif", marginLeft:10 }}>Dashboard</span>
-      </h2>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <div style={{ marginBottom:20 }}>
+        <p style={{ color:"#374151", margin:"0 0 2px", fontSize:11, fontWeight:600, letterSpacing:"0.12em", textTransform:"uppercase" }}>Panel de Control</p>
+        <h2 style={{ margin:0, fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:28, letterSpacing:"0.02em", lineHeight:1 }}>
+          <span style={{ color:"#c8cdd4" }}>AS</span><span style={{ color:"#f97316" }}>N</span>
+          <span style={{ color:"#252a32", fontSize:16, fontWeight:700, marginLeft:10, letterSpacing:"0.06em" }}>DASHBOARD</span>
+        </h2>
+        <div style={{ height:2, width:48, background:"linear-gradient(90deg,#f97316,#ea580c)", borderRadius:2, marginTop:8, boxShadow:"0 0 10px rgba(249,115,22,0.4)" }}/>
+      </div>
 
       {/* Estadísticas principales */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
@@ -528,19 +544,19 @@ function Dashboard({ data, setPage }) {
 
                   {/* Desglose */}
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
-                    <div style={{ background:"#10b98122", border:"1px solid #10b98144", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
+                    <div style={{ background:"rgba(16,185,129,0.07)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
                       <div style={{ color:"#10b981", fontWeight:900, fontSize:22 }}>{totalOkCount}</div>
                       <div style={{ color:"#10b981", fontSize:10, fontWeight:700, textTransform:"uppercase" }}>✅ OK</div>
                     </div>
-                    <div style={{ background:"#ef444422", border:"1px solid #ef444444", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
+                    <div style={{ background:"rgba(239,68,68,0.07)", border:"1px solid rgba(239,68,68,0.2)", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
                       <div style={{ color:"#ef4444", fontWeight:900, fontSize:22 }}>{totalCriticoCount}</div>
                       <div style={{ color:"#ef4444", fontSize:10, fontWeight:700, textTransform:"uppercase" }}>🔴 Crítico</div>
                     </div>
-                    <div style={{ background:"#f59e0b22", border:"1px solid #f59e0b44", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
+                    <div style={{ background:"rgba(245,158,11,0.07)", border:"1px solid rgba(245,158,11,0.2)", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
                       <div style={{ color:"#f59e0b", fontWeight:900, fontSize:22 }}>{totalPrevencionCount}</div>
                       <div style={{ color:"#f59e0b", fontSize:10, fontWeight:700, textTransform:"uppercase" }}>🟡 Prevención</div>
                     </div>
-                    <div style={{ background:"#60a5fa22", border:"1px solid #60a5fa44", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
+                    <div style={{ background:"rgba(96,165,250,0.07)", border:"1px solid rgba(96,165,250,0.2)", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
                       <div style={{ color:"#60a5fa", fontWeight:900, fontSize:22 }}>{totalSolicitarCount}</div>
                       <div style={{ color:"#60a5fa", fontSize:10, fontWeight:700, textTransform:"uppercase" }}>🔵 Solicitar</div>
                     </div>
@@ -578,8 +594,8 @@ function Dashboard({ data, setPage }) {
       })()}
 
       {/* Planes y servicios adicionales */}
-      <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, marginBottom:14, border:"1px solid #2a2a2a" }}>
-        <h3 style={{ color:"#e5e7eb", margin:"0 0 10px", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>Planes contratados</h3>
+      <div style={{ background:"linear-gradient(145deg,#1c1c1c,#161616)", borderRadius:16, padding:16, marginBottom:14, border:"1px solid #232323", boxShadow:"0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.02)" }}>
+        <h3 style={{ color:"#3d4451", margin:"0 0 10px", fontSize:10, fontWeight:700, letterSpacing:"0.14em", textTransform:"uppercase", fontFamily:"'Barlow Condensed',sans-serif" }}>Planes contratados</h3>
         {planCounts.map(s => (
           <div key={s.id} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
             <span style={{ fontSize:15 }}>{s.icon}</span>
@@ -607,8 +623,8 @@ function Dashboard({ data, setPage }) {
 
       {/* Últimos chequeos */}
       {recentChecks.length > 0 && (
-        <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, marginBottom:14, border:"1px solid #2a2a2a" }}>
-          <h3 style={{ color:"#e5e7eb", margin:"0 0 14px", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>Últimos Chequeos</h3>
+        <div style={{ background:"linear-gradient(145deg,#1c1c1c,#161616)", borderRadius:16, padding:16, marginBottom:14, border:"1px solid #232323", boxShadow:"0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.02)" }}>
+          <h3 style={{ color:"#3d4451", margin:"0 0 14px", fontSize:10, fontWeight:700, letterSpacing:"0.14em", textTransform:"uppercase", fontFamily:"'Barlow Condensed',sans-serif" }}>Últimos Chequeos</h3>
           {recentChecks.map(ch => {
             const allItems = CHECK_SECTIONS.flatMap(s => s.items);
             const ok = allItems.filter(i => (ch.itemStates||{})[i.id] === "ok").length;
@@ -645,16 +661,16 @@ function Dashboard({ data, setPage }) {
 
       {/* Acceso rápido */}
       <div style={{ marginBottom:6 }}>
-        <div style={{ color:"#4b5563", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:8 }}>Acceso rápido</div>
+        <div style={{ color:"#2d3340", fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.14em", marginBottom:8, fontFamily:"'Barlow Condensed',sans-serif" }}>Acceso rápido</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-          <button onClick={() => setPage("new-client")} style={{ padding:"14px", background:"#1a1a1a", border:"1px solid #f9731633", borderRadius:14, color:"#f97316", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+          <button onClick={() => setPage("new-client")} style={{ padding:"14px", background:"rgba(249,115,22,0.05)", border:"1px solid rgba(249,115,22,0.18)", borderRadius:12, color:"#f97316", fontWeight:700, fontSize:13, cursor:"pointer", letterSpacing:"0.02em" }}>
             ➕ Nuevo Cliente
           </button>
-          <button onClick={() => setPage("new-company")} style={{ padding:"14px", background:"#1a1a1a", border:"1px solid #60a5fa33", borderRadius:14, color:"#60a5fa", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+          <button onClick={() => setPage("new-company")} style={{ padding:"14px", background:"rgba(96,165,250,0.05)", border:"1px solid rgba(96,165,250,0.18)", borderRadius:12, color:"#60a5fa", fontWeight:700, fontSize:13, cursor:"pointer", letterSpacing:"0.02em" }}>
             🏢 Nueva Empresa
           </button>
         </div>
-        <button onClick={() => setPage("new-maquina")} style={{ width:"100%", padding:"14px", background:"#1a1a1a", border:"1px solid #a78bfa33", borderRadius:14, color:"#a78bfa", fontWeight:700, fontSize:13, cursor:"pointer", marginBottom:10 }}>
+        <button onClick={() => setPage("new-maquina")} style={{ width:"100%", padding:"14px", background:"rgba(167,139,250,0.05)", border:"1px solid rgba(167,139,250,0.18)", borderRadius:12, color:"#a78bfa", fontWeight:700, fontSize:13, cursor:"pointer", marginBottom:10, letterSpacing:"0.02em" }}>
           🏗️ Nueva Máquina
         </button>
         <button onClick={() => setPage("repairs")} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#7c3aed,#6d28d9)", border:"none", borderRadius:14, color:"#fff", fontWeight:900, fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
@@ -674,18 +690,18 @@ function ClientList({ data, setPage, setSelectedClient }) {
     (c.phone||"").includes(search)
   );
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
-      <h2 style={{ color:"#f97316", margin:"0 0 16px", fontSize:22, fontWeight:900 }}>Clientes Particulares</h2>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#f97316", margin:"0 0 16px", fontSize:26, fontWeight:900, letterSpacing:"0.03em", textTransform:"uppercase" }}>Clientes Particulares</h2>
       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar nombre, dominio, teléfono..."
-        style={{ width:"100%", padding:"12px 16px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, marginBottom:16, outline:"none" }}/>
-      {filtered.length === 0 && <div style={{ textAlign:"center", color:"#4b5563", padding:"40px 0" }}><div style={{ fontSize:48, marginBottom:12 }}>👤</div><div>No hay clientes todavía</div></div>}
+        style={{ width:"100%", padding:"12px 16px", borderRadius:12, background:"#111", border:"1px solid #2a2a2a", color:"#e5e7eb", fontSize:14, marginBottom:16, outline:"none", boxShadow:"inset 0 1px 3px rgba(0,0,0,0.3)" }}/>
+      {filtered.length === 0 && <div style={{ textAlign:"center", color:"#2d3340", padding:"48px 0" }}><div style={{ fontSize:44, marginBottom:12, opacity:0.6 }}>👤</div><div style={{ fontSize:13, letterSpacing:"0.04em" }}>No hay clientes todavía</div></div>}
       {filtered.map(c => {
         const svc = SERVICES.find(s => s.id === c.service);
         const clientChecks = data.checks.filter(ch => ch.clientId === c.id);
         return (
           <div key={c.id} onClick={() => { setSelectedClient(c); setPage("client-detail"); }}
-            style={{ background:"#1a1a1a", borderRadius:16, padding:"14px 16px", border:"1px solid #2a2a2a", cursor:"pointer", display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:`${svc?.color}22`, border:`1px solid ${svc?.color}55`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{svc?.icon}</div>
+            style={{ background:"linear-gradient(145deg,#1a1a1a,#151515)", borderRadius:16, padding:"14px 16px", border:"1px solid #252525", cursor:"pointer", display:"flex", alignItems:"center", gap:12, marginBottom:10, boxShadow:"0 2px 12px rgba(0,0,0,0.3)", transition:"border-color 0.2s" }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:`${svc?.color}12`, border:`1px solid ${svc?.color}35`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0, boxShadow:`0 0 12px ${svc?.color}15` }}>{svc?.icon}</div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ color:"#f1f5f9", fontWeight:700, fontSize:15, marginBottom:2 }}>{c.name||"Sin nombre"}</div>
               <div style={{ color:"#6b7280", fontSize:12 }}>🚗 {c.plate||"—"} · 📱 {c.phone||"—"}</div>
@@ -694,14 +710,14 @@ function ClientList({ data, setPage, setSelectedClient }) {
                 <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:4 }}>
                   {(c.extras||[]).map(eid => {
                     const ex = EXTRA_SERVICES.find(e => e.id === eid);
-                    return ex ? <span key={eid} style={{ fontSize:10, padding:"2px 7px", borderRadius:10, background:`${ex.color}18`, color:ex.color, fontWeight:700 }}>{ex.icon} {ex.name}</span> : null;
+                    return ex ? <span key={eid} style={{ fontSize:9, padding:"2px 8px", borderRadius:10, background:`${ex.color}10`, color:ex.color, fontWeight:800, border:`1px solid ${ex.color}25`, letterSpacing:"0.04em" }}>{ex.icon} {ex.name}</span> : null;
                   })}
                 </div>
               )}
             </div>
             <div style={{ textAlign:"right", flexShrink:0 }}>
-              <div style={{ color:svc?.color, fontSize:11, fontWeight:700, marginBottom:4 }}>{svc?.name}</div>
-              <div style={{ color:"#4b5563", fontSize:11 }}>{clientChecks.length} chequeos</div>
+              <div style={{ color:svc?.color, fontSize:10, fontWeight:800, marginBottom:4, letterSpacing:"0.08em", textTransform:"uppercase" }}>{svc?.name}</div>
+              <div style={{ color:"#2d3340", fontSize:10, letterSpacing:"0.04em" }}>{clientChecks.length} CHQ</div>
             </div>
           </div>
         );
@@ -983,8 +999,8 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
   }
 
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
-      <button onClick={() => setPage("clients")} style={{ background:"none", border:"none", color:"#f97316", cursor:"pointer", fontSize:14, fontWeight:700, marginBottom:16, padding:0 }}>← Volver</button>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <button onClick={() => setPage("clients")} style={{ background:"none", border:"none", color:"#c2400c", cursor:"pointer", fontSize:13, fontWeight:700, marginBottom:16, padding:"6px 0", letterSpacing:"0.04em" }}>← Volver</button>
       <div style={{ background:"#1a1a1a", borderRadius:20, padding:20, border:`1px solid ${svc?.color}44`, marginBottom:16 }}>
         <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:16 }}>
           <div style={{ width:56, height:56, borderRadius:16, background:`${svc?.color}22`, border:`2px solid ${svc?.color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>{svc?.icon}</div>
@@ -1025,7 +1041,7 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
                   <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                     <span style={{ color:"#9ca3af", fontSize:12 }}>{item.label}</span>
                     {est
-                      ? <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}44` }}>{est.label}</span>
+                      ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}33`, letterSpacing:"0.06em" }}>{est.label}</span>
                       : <span style={{ color:"#4b5563", fontSize:11 }}>—</span>
                     }
                   </div>
@@ -1049,7 +1065,7 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
         <button onClick={() => setTab("chequeos")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`2px solid ${tab==="chequeos" ? "#f97316" : "#2a2a2a"}`, background: tab==="chequeos" ? "#f9731622" : "#111", color: tab==="chequeos" ? "#f97316" : "#6b7280", fontWeight:700, fontSize:13 }}>
           ✅ Chequeos ({clientChecks.length})
         </button>
-        <button onClick={() => setTab("reparaciones")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`2px solid ${tab==="reparaciones" ? "#a78bfa" : "#2a2a2a"}`, background: tab==="reparaciones" ? "#a78bfa22" : "#111", color: tab==="reparaciones" ? "#a78bfa" : "#6b7280", fontWeight:700, fontSize:13 }}>
+        <button onClick={() => setTab("reparaciones")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`1px solid ${tab==="reparaciones" ? "#a78bfa" : "#222"}`, background: tab==="reparaciones" ? "rgba(167,139,250,0.1)" : "#111", color: tab==="reparaciones" ? "#a78bfa" : "#374151", fontWeight:700, fontSize:12, letterSpacing:"0.04em" }}>
           🔧 Reparaciones ({repairs.length})
         </button>
         {client.tieneTrailer && (
@@ -1069,27 +1085,27 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
               const criticos = allItems.filter(i => estados[i.id] === "critico").length;
               const pct = Math.round((ok / allItems.length) * 100);
               return (
-                <div key={ch.id} style={{ background:"#1a1a1a", borderRadius:14, padding:"14px 16px", border:"1px solid #2a2a2a", marginBottom:12 }}>
+                <div key={ch.id} style={{ background:"linear-gradient(145deg,#1b1b1b,#141414)", borderRadius:14, padding:"14px 16px", border:"1px solid #222", marginBottom:12, boxShadow:"0 2px 12px rgba(0,0,0,0.25)" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
                     <span style={{ color:"#9ca3af", fontSize:12 }}>{new Date(ch.createdAt).toLocaleDateString("es-AR")}{ch.perito ? ` · ${ch.perito}` : ""}</span>
                     <span style={{ color: criticos > 0 ? "#ef4444" : "#10b981", fontWeight:700, fontSize:14 }}>{criticos > 0 ? `${criticos} críticos` : `${ok} OK`}</span>
                   </div>
-                  <div style={{ width:"100%", height:6, background:"#2a2a2a", borderRadius:3, overflow:"hidden", marginBottom:8 }}>
+                  <div style={{ width:"100%", height:5, background:"#1a1a1a", borderRadius:3, overflow:"hidden", marginBottom:8 }}>
                     <div style={{ width:`${pct}%`, height:"100%", borderRadius:3, background: criticos > 0 ? "#ef4444" : pct >= 80 ? "#10b981" : "#f59e0b" }}/>
                   </div>
                   {ch.recomendaciones && <div style={{ color:"#6b7280", fontSize:12, marginBottom:4 }}>💡 {ch.recomendaciones}</div>}
                   {ch.detalle && <div style={{ color:"#6b7280", fontSize:12, marginBottom:8 }}>📝 {ch.detalle}</div>}
                   <div style={{ display:"flex", gap:8, marginTop:10 }}>
-                    <button onClick={() => enviarWpp(ch)} style={{ flex:1, padding:"10px 8px", borderRadius:12, background:"linear-gradient(135deg,#25d366,#128c7e)", border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
+                    <button onClick={() => enviarWpp(ch)} style={{ flex:1, padding:"10px 8px", borderRadius:10, background:"linear-gradient(135deg,#22c55e,#15803d)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:5, letterSpacing:"0.04em" }}>
                       💬 WhatsApp
                     </button>
-                    <button onClick={() => exportarPDF(client, ch, false)} style={{ flex:1, padding:"10px 8px", borderRadius:12, background:"linear-gradient(135deg,#ef4444,#dc2626)", border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
+                    <button onClick={() => exportarPDF(client, ch, false)} style={{ flex:1, padding:"10px 8px", borderRadius:10, background:"linear-gradient(135deg,#ef4444,#991b1b)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:5, letterSpacing:"0.04em" }}>
                       📄 PDF
                     </button>
-                    <button onClick={() => copiarInforme(ch)} style={{ padding:"10px 12px", borderRadius:12, background:"#2a2a2a", border:"1px solid #3a3a3a", color:"#9ca3af", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                    <button onClick={() => copiarInforme(ch)} style={{ padding:"10px 12px", borderRadius:10, background:"#161616", border:"1px solid #252525", color:"#4b5563", fontWeight:700, fontSize:13, cursor:"pointer" }}>
                       📋
                     </button>
-                    <button onClick={() => deleteCheck(ch.id)} style={{ padding:"10px 12px", borderRadius:12, background:"transparent", border:"1px solid #ef444433", color:"#ef4444", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                    <button onClick={() => deleteCheck(ch.id)} style={{ padding:"10px 12px", borderRadius:10, background:"transparent", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", fontWeight:700, fontSize:13, cursor:"pointer" }}>
                       🗑️
                     </button>
                   </div>
@@ -1127,7 +1143,7 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
         />
       )}
 
-      <button onClick={deleteClient} style={{ width:"100%", marginTop:16, padding:"14px", background:"#1a1a1a", border:"1px solid #ef444444", color:"#ef4444", borderRadius:14, cursor:"pointer", fontWeight:700, fontSize:14 }}>
+      <button onClick={deleteClient} style={{ width:"100%", marginTop:16, padding:"13px", background:"rgba(239,68,68,0.04)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", borderRadius:12, cursor:"pointer", fontWeight:700, fontSize:13, letterSpacing:"0.06em" }}>
         🗑️ Eliminar cliente
       </button>
     </div>
@@ -1138,9 +1154,9 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
 function Field({ label, value, onChange, placeholder, type="text" }) {
   return (
     <div>
-      <label style={{ color:"#9ca3af", fontSize:12, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", display:"block", marginBottom:8 }}>{label}</label>
+      <label style={{ color:"#4b5563", fontSize:10, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", display:"block", marginBottom:8, fontFamily:"'Barlow Condensed',sans-serif" }}>{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+        style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#111", border:"1px solid #2a2a2a", color:"#e5e7eb", fontSize:14, outline:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
     </div>
   );
 }
@@ -1164,12 +1180,12 @@ function NewClient({ data, setPage }) {
   if (saved) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"80vh", gap:16 }}>
       <div style={{ fontSize:64 }}>✅</div>
-      <div style={{ color:"#10b981", fontWeight:900, fontSize:20 }}>Cliente guardado</div>
+      <div style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#10b981", fontWeight:900, fontSize:24, letterSpacing:"0.04em", textTransform:"uppercase" }}>Cliente guardado</div>
     </div>
   );
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
-      <h2 style={{ color:"#f97316", margin:"0 0 20px", fontSize:22, fontWeight:900 }}>Nuevo Cliente</h2>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#f97316", margin:"0 0 20px", fontSize:26, fontWeight:900, letterSpacing:"0.03em", textTransform:"uppercase" }}>Nuevo Cliente</h2>
       <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
         <Field label="Nombre completo" value={form.name} onChange={v => set("name",v)} placeholder="Juan Pérez"/>
         <Field label="Teléfono" value={form.phone} onChange={v => set("phone",v)} placeholder="11-2345-6789" type="tel"/>
@@ -1181,7 +1197,7 @@ function NewClient({ data, setPage }) {
           <label style={{ color:"#9ca3af", fontSize:12, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Plan contratado</label>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
             {PLANS.map(s => (
-              <button key={s.id} onClick={() => set("service", s.id)} style={{ padding:"12px 6px", borderRadius:12, cursor:"pointer", border:`2px solid ${form.service===s.id ? s.color : "#2a2a2a"}`, background: form.service===s.id ? `${s.color}22` : "#1a1a1a", color: form.service===s.id ? s.color : "#6b7280", fontWeight:700, fontSize:12, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+              <button key={s.id} onClick={() => set("service", s.id)} style={{ padding:"12px 6px", borderRadius:12, cursor:"pointer", border:`1px solid ${form.service===s.id ? s.color : "#222"}`, background: form.service===s.id ? `${s.color}12` : "#111", color: form.service===s.id ? s.color : "#374151", fontWeight:700, fontSize:12, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
                 <span style={{ fontSize:20 }}>{s.icon}</span>
                 <span>{s.name}</span>
               </button>
@@ -1196,7 +1212,7 @@ function NewClient({ data, setPage }) {
             {EXTRA_SERVICES.map(s => {
               const active = form.extras.includes(s.id);
               return (
-                <button key={s.id} onClick={() => toggleExtra(s.id)} style={{ padding:"11px 14px", borderRadius:12, cursor:"pointer", border:`2px solid ${active ? s.color : "#2a2a2a"}`, background: active ? `${s.color}18` : "#1a1a1a", color: active ? s.color : "#6b7280", fontWeight:700, fontSize:13, display:"flex", alignItems:"center", gap:10, textAlign:"left" }}>
+                <button key={s.id} onClick={() => toggleExtra(s.id)} style={{ padding:"11px 14px", borderRadius:12, cursor:"pointer", border:`1px solid ${active ? s.color : "#202020"}`, background: active ? `${s.color}10` : "#111", color: active ? s.color : "#374151", fontWeight:700, fontSize:13, display:"flex", alignItems:"center", gap:10, textAlign:"left" }}>
                   <span style={{ fontSize:18 }}>{s.icon}</span>
                   <span style={{ flex:1 }}>{s.name}</span>
                   <span style={{ fontSize:16 }}>{active ? "✓" : "+"}</span>
@@ -1243,9 +1259,9 @@ function NewClient({ data, setPage }) {
         <div>
           <label style={{ color:"#9ca3af", fontSize:12, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Notas (opcional)</label>
           <textarea value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Observaciones adicionales..." rows={3}
-            style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none" }}/>
+            style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#0f0f0f", border:"1px solid #252525", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
         </div>
-        <button onClick={handleSave} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#f97316,#ea580c)", border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:16, marginTop:8 }}>
+        <button onClick={handleSave} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#f97316,#c2400c)", border:"none", color:"#fff", borderRadius:12, cursor:"pointer", fontWeight:800, fontSize:15, marginTop:8, letterSpacing:"0.06em", textTransform:"uppercase", boxShadow:"0 4px 20px rgba(249,115,22,0.35), inset 0 1px 0 rgba(255,255,255,0.1)" }}>
           Guardar Cliente
         </button>
       </div>
@@ -1261,17 +1277,17 @@ function Companies({ data, setPage, setSelectedCompany }) {
     (c.cuit||"").includes(search)
   );
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
-      <h2 style={{ color:"#60a5fa", margin:"0 0 16px", fontSize:22, fontWeight:900 }}>Empresas</h2>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#60a5fa", margin:"0 0 16px", fontSize:26, fontWeight:900, letterSpacing:"0.03em", textTransform:"uppercase" }}>Empresas</h2>
       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar empresa o CUIT..."
-        style={{ width:"100%", padding:"12px 16px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, marginBottom:16, outline:"none" }}/>
-      {filtered.length === 0 && <div style={{ textAlign:"center", color:"#4b5563", padding:"40px 0" }}><div style={{ fontSize:48, marginBottom:12 }}>🏢</div><div>No hay empresas todavía</div></div>}
+        style={{ width:"100%", padding:"12px 16px", borderRadius:12, background:"#111", border:"1px solid #2a2a2a", color:"#e5e7eb", fontSize:14, marginBottom:16, outline:"none", boxShadow:"inset 0 1px 3px rgba(0,0,0,0.3)" }}/>
+      {filtered.length === 0 && <div style={{ textAlign:"center", color:"#2d3340", padding:"48px 0" }}><div style={{ fontSize:44, marginBottom:12, opacity:0.6 }}>🏢</div><div style={{ fontSize:13, letterSpacing:"0.04em" }}>No hay empresas todavía</div></div>}
       {filtered.map(c => {
         const vehicleCount = (c.vehicles || []).length;
         return (
           <div key={c.id} onClick={() => { setSelectedCompany(c); setPage("company-detail"); }}
-            style={{ background:"#1a1a1a", borderRadius:16, padding:"14px 16px", border:"1px solid #2a2a2a", cursor:"pointer", display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:"#60a5fa22", border:"1px solid #60a5fa55", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>🏢</div>
+            style={{ background:"linear-gradient(145deg,#1a1a1a,#151515)", borderRadius:16, padding:"14px 16px", border:"1px solid #252525", cursor:"pointer", display:"flex", alignItems:"center", gap:12, marginBottom:10, boxShadow:"0 2px 12px rgba(0,0,0,0.3)", transition:"border-color 0.2s" }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:"rgba(96,165,250,0.08)", border:"1px solid rgba(96,165,250,0.22)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0, boxShadow:"0 0 12px rgba(96,165,250,0.1)" }}>🏢</div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ color:"#f1f5f9", fontWeight:700, fontSize:15, marginBottom:2 }}>{c.name}</div>
               {c.cuit && <div style={{ color:"#6b7280", fontSize:12 }}>CUIT: {c.cuit}</div>}
@@ -1284,7 +1300,7 @@ function Companies({ data, setPage, setSelectedCompany }) {
           </div>
         );
       })}
-      <button onClick={() => setPage("new-company")} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#3b82f6,#2563eb)", border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:15, marginTop:8 }}>
+      <button onClick={() => setPage("new-company")} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#3b82f6,#1d4ed8)", border:"none", color:"#fff", borderRadius:12, cursor:"pointer", fontWeight:800, fontSize:14, marginTop:8, letterSpacing:"0.06em", textTransform:"uppercase", boxShadow:"0 4px 20px rgba(59,130,246,0.3), inset 0 1px 0 rgba(255,255,255,0.1)" }}>
         + Nueva Empresa
       </button>
     </div>
@@ -1305,12 +1321,12 @@ function NewCompany({ setPage }) {
   if (saved) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"80vh", gap:16 }}>
       <div style={{ fontSize:64 }}>✅</div>
-      <div style={{ color:"#10b981", fontWeight:900, fontSize:20 }}>Empresa guardada</div>
+      <div style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#10b981", fontWeight:900, fontSize:24, letterSpacing:"0.04em", textTransform:"uppercase" }}>Empresa guardada</div>
     </div>
   );
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
-      <button onClick={() => setPage("companies")} style={{ background:"none", border:"none", color:"#60a5fa", cursor:"pointer", fontSize:14, fontWeight:700, marginBottom:16, padding:0 }}>← Volver</button>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <button onClick={() => setPage("companies")} style={{ background:"none", border:"none", color:"#3b5bdb", cursor:"pointer", fontSize:13, fontWeight:700, marginBottom:16, padding:"6px 0", letterSpacing:"0.04em", display:"flex", alignItems:"center", gap:6 }}>← Volver</button>
       <h2 style={{ color:"#60a5fa", margin:"0 0 20px", fontSize:22, fontWeight:900 }}>Nueva Empresa</h2>
       <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
         {[["Nombre de la empresa *", "name", "Transportes García S.A.", "text"],
@@ -1318,15 +1334,15 @@ function NewCompany({ setPage }) {
           ["CUIT", "cuit", "20-12345678-9", "text"],
           ["Dirección", "address", "Av. Corrientes 1234", "text"]].map(([label, key, ph, type]) => (
           <div key={key}>
-            <label style={{ color:"#9ca3af", fontSize:12, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", display:"block", marginBottom:8 }}>{label}</label>
+            <label style={{ color:"#4b5563", fontSize:10, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", display:"block", marginBottom:8, fontFamily:"'Barlow Condensed',sans-serif" }}>{label}</label>
             <input type={type} value={form[key]} onChange={e => set(key, e.target.value)} placeholder={ph}
-              style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+              style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#111", border:"1px solid #2a2a2a", color:"#e5e7eb", fontSize:14, outline:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
           </div>
         ))}
         <div>
           <label style={{ color:"#9ca3af", fontSize:12, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Notas (opcional)</label>
           <textarea value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Observaciones sobre la empresa..." rows={3}
-            style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none" }}/>
+            style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#0f0f0f", border:"1px solid #252525", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
         </div>
         <button onClick={handleSave} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#3b82f6,#2563eb)", border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:16, marginTop:8 }}>
           Guardar Empresa
@@ -1392,11 +1408,11 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
   const companyChecks = data.checks.filter(ch => vehicles.some(v => v.id === ch.vehicleId));
 
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
-      <button onClick={() => setPage("companies")} style={{ background:"none", border:"none", color:"#60a5fa", cursor:"pointer", fontSize:14, fontWeight:700, marginBottom:16, padding:0 }}>← Volver</button>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <button onClick={() => setPage("companies")} style={{ background:"none", border:"none", color:"#3b5bdb", cursor:"pointer", fontSize:13, fontWeight:700, marginBottom:16, padding:"6px 0", letterSpacing:"0.04em", display:"flex", alignItems:"center", gap:6 }}>← Volver</button>
 
       {/* Header empresa */}
-      <div style={{ background:"#1a1a1a", borderRadius:20, padding:20, border:"1px solid #60a5fa44", marginBottom:16 }}>
+      <div style={{ background:"linear-gradient(145deg,#1c1c1c,#141414)", borderRadius:18, padding:20, border:"1px solid rgba(96,165,250,0.2)", marginBottom:16, boxShadow:"0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(96,165,250,0.04)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:16 }}>
           <div style={{ width:56, height:56, borderRadius:16, background:"#60a5fa22", border:"2px solid #60a5fa", display:"flex", alignItems:"center", justifyContent:"center", fontSize:28 }}>🏢</div>
           <div>
@@ -1411,11 +1427,11 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
           </div>
         ))}
         <div style={{ display:"flex", gap:8, marginTop:12 }}>
-          <div style={{ flex:1, background:"#10b98122", border:"1px solid #10b98144", borderRadius:10, padding:"8px 12px", textAlign:"center" }}>
+          <div style={{ flex:1, background:"rgba(16,185,129,0.07)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:10, padding:"8px 12px", textAlign:"center" }}>
             <div style={{ color:"#10b981", fontWeight:900, fontSize:18 }}>{vehicles.length}</div>
             <div style={{ color:"#6b7280", fontSize:10 }}>Vehículos</div>
           </div>
-          <div style={{ flex:1, background:"#f9731622", border:"1px solid #f9731644", borderRadius:10, padding:"8px 12px", textAlign:"center" }}>
+          <div style={{ flex:1, background:"rgba(249,115,22,0.07)", border:"1px solid rgba(249,115,22,0.2)", borderRadius:10, padding:"8px 12px", textAlign:"center" }}>
             <div style={{ color:"#f97316", fontWeight:900, fontSize:18 }}>{companyChecks.length}</div>
             <div style={{ color:"#6b7280", fontSize:10 }}>Chequeos</div>
           </div>
@@ -1450,7 +1466,7 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
               <span>🚐</span><span style={{ flex:1 }}>¿Tiene trailer?</span><span>{vForm.tieneTrailer ? "✓ Sí" : "+ No"}</span>
             </button>
             {vForm.tieneTrailer && (
-              <div style={{ background:"#0d0d0d", borderRadius:10, padding:12, border:"1px solid #f9731633" }}>
+              <div style={{ background:"#080808", borderRadius:10, padding:12, border:"1px solid #f9731633" }}>
                 <div style={{ color:"#f97316", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>Control del trailer</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                   {TRAILER_CHECK_ITEMS.map(item => {
@@ -1495,7 +1511,7 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
               healthColor = criticos > 0 ? "#ef4444" : pct >= 80 ? "#10b981" : "#f59e0b";
             }
             return (
-              <div key={v.id} style={{ background:"#1a1a1a", borderRadius:14, padding:"14px 16px", border:"1px solid #2a2a2a", marginBottom:10 }}>
+              <div key={v.id} style={{ background:"linear-gradient(145deg,#1b1b1b,#141414)", borderRadius:14, padding:"14px 16px", border:"1px solid #202020", marginBottom:10, boxShadow:"0 2px 12px rgba(0,0,0,0.25)" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:12 }}>
                   <div style={{ width:42, height:42, borderRadius:10, background:"#1f2937", border:`2px solid ${healthColor}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>🚛</div>
                   <div style={{ flex:1, minWidth:0 }}>
@@ -1510,7 +1526,7 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
                 </div>
                 <div style={{ display:"flex", gap:8, marginTop:10 }}>
                   <button onClick={() => { setSelectedVehicle({...v, companyId: company.id, companyName: company.name}); setPage("vehicle-detail"); }}
-                    style={{ flex:1, padding:"8px", borderRadius:10, background:"#2a2a2a", border:"1px solid #3a3a3a", color:"#9ca3af", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                    style={{ flex:1, padding:"8px", borderRadius:9, background:"#141414", border:"1px solid #222", color:"#374151", fontWeight:700, fontSize:11, cursor:"pointer", letterSpacing:"0.04em" }}>
                     Ver historial
                   </button>
                   <button onClick={() => editingVehicle === v.id ? (setEditingVehicle(null), setEForm(null)) : startEdit(v)}
@@ -1524,7 +1540,7 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
 
                 {/* Formulario edición inline */}
                 {editingVehicle === v.id && eForm && (
-                  <div style={{ marginTop:12, padding:14, background:"#111", borderRadius:12, border:"1px solid #10b98133", display:"flex", flexDirection:"column", gap:10 }}>
+                  <div style={{ marginTop:12, padding:14, background:"#0d0d0d", borderRadius:12, border:"1px solid rgba(16,185,129,0.2)", display:"flex", flexDirection:"column", gap:10, boxShadow:"0 2px 12px rgba(0,0,0,0.4)" }}>
                     <div style={{ color:"#10b981", fontSize:12, fontWeight:700, textTransform:"uppercase", marginBottom:2 }}>✏️ Editar vehículo</div>
                     <input value={eForm.plate} onChange={e => setEForm(f => ({...f, plate: e.target.value.toUpperCase()}))} placeholder="Dominio / Patente"
                       style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
@@ -1542,7 +1558,7 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
                     </button>
 
                     {eForm.tieneTrailer && (
-                      <div style={{ background:"#0d0d0d", borderRadius:10, padding:12, border:"1px solid #f9731633" }}>
+                      <div style={{ background:"#080808", borderRadius:10, padding:12, border:"1px solid #f9731633" }}>
                         <div style={{ color:"#f97316", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>Control del trailer</div>
                         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                           {TRAILER_CHECK_ITEMS.map(item => {
@@ -1567,11 +1583,11 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
 
                     <div style={{ display:"flex", gap:8 }}>
                       <button onClick={() => saveEdit(v.id)} disabled={saving}
-                        style={{ flex:1, padding:"10px", background:"linear-gradient(135deg,#10b981,#059669)", border:"none", color:"#fff", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:13 }}>
+                        style={{ flex:1, padding:"10px", background:"linear-gradient(135deg,#10b981,#047857)", border:"none", color:"#fff", borderRadius:9, cursor:"pointer", fontWeight:700, fontSize:12, letterSpacing:"0.05em" }}>
                         {saving ? "Guardando..." : "✓ Guardar cambios"}
                       </button>
                       <button onClick={() => { setEditingVehicle(null); setEForm(null); }}
-                        style={{ padding:"10px 14px", background:"transparent", border:"1px solid #333", color:"#6b7280", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:13 }}>
+                        style={{ padding:"10px 14px", background:"transparent", border:"1px solid #222", color:"#374151", borderRadius:9, cursor:"pointer", fontWeight:700, fontSize:12, letterSpacing:"0.04em" }}>
                         Cancelar
                       </button>
                     </div>
@@ -1598,7 +1614,7 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
               : maquinasEmpresa.map(m => {
                   const tipo = (window.MAQUINA_TIPOS||[]).find(t => t.id === m.tipo);
                   return (
-                    <div key={m.id} style={{ background:"#1a1a1a", borderRadius:14, padding:"14px 16px", border:"1px solid #a78bfa33", marginBottom:10 }}>
+                    <div key={m.id} style={{ background:"linear-gradient(145deg,#1b1b1b,#141414)", borderRadius:14, padding:"14px 16px", border:"1px solid rgba(167,139,250,0.18)", marginBottom:10, boxShadow:"0 2px 12px rgba(0,0,0,0.3)" }}>
                       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
                         <div style={{ width:42, height:42, borderRadius:10, background:"#7c3aed22", border:"2px solid #a78bfa", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{tipo?.icon || "🏗️"}</div>
                         <div style={{ flex:1, minWidth:0 }}>
@@ -1620,7 +1636,7 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
         );
       })()}
 
-      <button onClick={deleteCompany} style={{ width:"100%", marginTop:8, padding:"14px", background:"#1a1a1a", border:"1px solid #ef444444", color:"#ef4444", borderRadius:14, cursor:"pointer", fontWeight:700, fontSize:14 }}>
+      <button onClick={deleteCompany} style={{ width:"100%", marginTop:8, padding:"13px", background:"rgba(239,68,68,0.04)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", borderRadius:12, cursor:"pointer", fontWeight:700, fontSize:13, letterSpacing:"0.06em" }}>
         🗑️ Eliminar empresa
       </button>
     </div>
@@ -1702,10 +1718,10 @@ function VehicleDetail({ vehicle, data, setPage }) {
   }
 
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
-      <button onClick={() => setPage("company-detail")} style={{ background:"none", border:"none", color:"#60a5fa", cursor:"pointer", fontSize:14, fontWeight:700, marginBottom:16, padding:0 }}>← Volver</button>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <button onClick={() => setPage("company-detail")} style={{ background:"none", border:"none", color:"#3b5bdb", cursor:"pointer", fontSize:13, fontWeight:700, marginBottom:16, padding:"6px 0", letterSpacing:"0.04em", display:"flex", alignItems:"center", gap:6 }}>← Volver</button>
 
-      <div style={{ background:"#1a1a1a", borderRadius:20, padding:20, border:"1px solid #60a5fa44", marginBottom:16 }}>
+      <div style={{ background:"linear-gradient(145deg,#1c1c1c,#141414)", borderRadius:18, padding:20, border:"1px solid rgba(96,165,250,0.2)", marginBottom:16, boxShadow:"0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(96,165,250,0.04)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
           <span style={{ fontSize:32 }}>🚛</span>
           <div>
@@ -1728,7 +1744,7 @@ function VehicleDetail({ vehicle, data, setPage }) {
                   <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                     <span style={{ color:"#9ca3af", fontSize:12 }}>{item.label}</span>
                     {est
-                      ? <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}44` }}>{est.label}</span>
+                      ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}33`, letterSpacing:"0.06em" }}>{est.label}</span>
                       : <span style={{ color:"#4b5563", fontSize:11 }}>—</span>
                     }
                   </div>
@@ -1741,10 +1757,10 @@ function VehicleDetail({ vehicle, data, setPage }) {
 
       {/* Tabs */}
       <div style={{ display:"grid", gridTemplateColumns: vehicle.tieneTrailer ? "1fr 1fr 1fr" : "1fr 1fr", gap:8, marginBottom:16 }}>
-        <button onClick={() => setTab("chequeos")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`2px solid ${tab==="chequeos" ? "#60a5fa" : "#2a2a2a"}`, background: tab==="chequeos" ? "#60a5fa22" : "#111", color: tab==="chequeos" ? "#60a5fa" : "#6b7280", fontWeight:700, fontSize:13 }}>
+        <button onClick={() => setTab("chequeos")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`1px solid ${tab==="chequeos" ? "#60a5fa" : "#222"}`, background: tab==="chequeos" ? "rgba(96,165,250,0.1)" : "#111", color: tab==="chequeos" ? "#60a5fa" : "#374151", fontWeight:700, fontSize:12, letterSpacing:"0.04em" }}>
           ✅ Chequeos ({vChecks.length})
         </button>
-        <button onClick={() => setTab("reparaciones")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`2px solid ${tab==="reparaciones" ? "#a78bfa" : "#2a2a2a"}`, background: tab==="reparaciones" ? "#a78bfa22" : "#111", color: tab==="reparaciones" ? "#a78bfa" : "#6b7280", fontWeight:700, fontSize:13 }}>
+        <button onClick={() => setTab("reparaciones")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`1px solid ${tab==="reparaciones" ? "#a78bfa" : "#222"}`, background: tab==="reparaciones" ? "rgba(167,139,250,0.1)" : "#111", color: tab==="reparaciones" ? "#a78bfa" : "#374151", fontWeight:700, fontSize:12, letterSpacing:"0.04em" }}>
           🔧 Reparaciones ({repairs.length})
         </button>
         {vehicle.tieneTrailer && (
@@ -1765,28 +1781,28 @@ function VehicleDetail({ vehicle, data, setPage }) {
               const criticos = allItems.filter(i => estados[i.id] === "critico").length;
               const pct = Math.round((ok / allItems.length) * 100);
               return (
-                <div key={ch.id} style={{ background:"#1a1a1a", borderRadius:14, padding:"14px 16px", border:"1px solid #2a2a2a", marginBottom:12 }}>
+                <div key={ch.id} style={{ background:"linear-gradient(145deg,#1b1b1b,#141414)", borderRadius:14, padding:"14px 16px", border:"1px solid #222", marginBottom:12, boxShadow:"0 2px 12px rgba(0,0,0,0.25)" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
                     <span style={{ color:"#9ca3af", fontSize:12 }}>{new Date(ch.createdAt).toLocaleDateString("es-AR")}{ch.perito ? ` · ${ch.perito}` : ""}</span>
                     <span style={{ color: criticos > 0 ? "#ef4444" : "#10b981", fontWeight:700, fontSize:14 }}>{criticos > 0 ? `${criticos} críticos` : `${ok} OK`}</span>
                   </div>
-                  <div style={{ width:"100%", height:6, background:"#2a2a2a", borderRadius:3, overflow:"hidden", marginBottom:8 }}>
+                  <div style={{ width:"100%", height:5, background:"#1a1a1a", borderRadius:3, overflow:"hidden", marginBottom:8 }}>
                     <div style={{ width:`${pct}%`, height:"100%", borderRadius:3, background: criticos > 0 ? "#ef4444" : pct >= 80 ? "#10b981" : "#f59e0b" }}/>
                   </div>
                   {ch.kms && <div style={{ color:"#6b7280", fontSize:12, marginBottom:4 }}>🔢 KMs: {ch.kms}</div>}
                   {ch.recomendaciones && <div style={{ color:"#6b7280", fontSize:12, marginBottom:4 }}>💡 {ch.recomendaciones}</div>}
                   {ch.detalle && <div style={{ color:"#6b7280", fontSize:12, marginBottom:8 }}>📝 {ch.detalle}</div>}
                   <div style={{ display:"flex", gap:8, marginTop:10 }}>
-                    <button onClick={() => enviarWpp(ch)} style={{ flex:1, padding:"10px 8px", borderRadius:12, background:"linear-gradient(135deg,#25d366,#128c7e)", border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                    <button onClick={() => enviarWpp(ch)} style={{ flex:1, padding:"10px 8px", borderRadius:12, background:"linear-gradient(135deg,#22c55e,#16a34a)", border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>
                       💬 WhatsApp
                     </button>
-                    <button onClick={() => exportarPDF(vehicle, ch, true)} style={{ flex:1, padding:"10px 8px", borderRadius:12, background:"linear-gradient(135deg,#ef4444,#dc2626)", border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                    <button onClick={() => exportarPDF(vehicle, ch, true)} style={{ flex:1, padding:"10px 8px", borderRadius:12, background:"linear-gradient(135deg,#ef4444,#b91c1c)", border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>
                       📄 PDF
                     </button>
-                    <button onClick={() => copiarInforme(ch)} style={{ padding:"10px 12px", borderRadius:12, background:"#2a2a2a", border:"1px solid #3a3a3a", color:"#9ca3af", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                    <button onClick={() => copiarInforme(ch)} style={{ padding:"10px 12px", borderRadius:10, background:"#161616", border:"1px solid #252525", color:"#4b5563", fontWeight:700, fontSize:13, cursor:"pointer" }}>
                       📋
                     </button>
-                    <button onClick={() => deleteVehicleCheck(ch.id)} style={{ padding:"10px 12px", borderRadius:12, background:"transparent", border:"1px solid #ef444433", color:"#ef4444", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                    <button onClick={() => deleteVehicleCheck(ch.id)} style={{ padding:"10px 12px", borderRadius:10, background:"transparent", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", fontWeight:700, fontSize:13, cursor:"pointer" }}>
                       🗑️
                     </button>
                   </div>
@@ -1956,7 +1972,7 @@ function TrailerHistorial({ entity, tipo, onSave, onAddHistorial, onDeleteHistor
           <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", margin:0 }}>🚐 Estado actual del trailer</h3>
           <span style={{ color:healthColor, fontWeight:900, fontSize:16 }}>{pct}%</span>
         </div>
-        <div style={{ width:"100%", height:8, background:"#2a2a2a", borderRadius:4, overflow:"hidden", marginBottom:10 }}>
+        <div style={{ width:"100%", height:5, background:"#1a1a1a", borderRadius:3, overflow:"hidden", marginBottom:10 }}>
           <div style={{ width:`${pct}%`, height:"100%", background:healthColor, borderRadius:4, transition:"width 0.5s" }}/>
         </div>
         <div style={{ display:"flex", gap:8, marginBottom:12 }}>
@@ -2016,7 +2032,7 @@ function TrailerHistorial({ entity, tipo, onSave, onAddHistorial, onDeleteHistor
 
         {!editMode && (
           <button onClick={() => { setEditMode(true); setDraft({...trailerCheck}); }}
-            style={{ width:"100%", marginTop:12, padding:"10px", background:"#f59e0b22", border:"1px solid #f59e0b44", color:"#f59e0b", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:13 }}>
+            style={{ width:"100%", marginTop:12, padding:"10px", background:"rgba(245,158,11,0.07)", border:"1px solid rgba(245,158,11,0.2)", color:"#f59e0b", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:13 }}>
             ✏️ Editar estado
           </button>
         )}
@@ -2029,7 +2045,7 @@ function TrailerHistorial({ entity, tipo, onSave, onAddHistorial, onDeleteHistor
         </h3>
         {!showForm && (
           <button onClick={() => { setEntryForm(f => ({...f, estados:{...trailerCheck}})); setShowForm(true); }}
-            style={{ padding:"8px 14px", borderRadius:10, background:"#f59e0b22", border:"1px solid #f59e0b44", color:"#f59e0b", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+            style={{ padding:"8px 14px", borderRadius:10, background:"rgba(245,158,11,0.07)", border:"1px solid rgba(245,158,11,0.2)", color:"#f59e0b", fontWeight:700, fontSize:12, cursor:"pointer" }}>
             + Nuevo chequeo
           </button>
         )}
@@ -2105,7 +2121,7 @@ function TrailerHistorial({ entity, tipo, onSave, onAddHistorial, onDeleteHistor
                 </div>
                 <span style={{ color:hColor, fontWeight:900, fontSize:14 }}>{pctE}%</span>
               </div>
-              <div style={{ width:"100%", height:6, background:"#2a2a2a", borderRadius:3, overflow:"hidden", marginBottom:8 }}>
+              <div style={{ width:"100%", height:5, background:"#1a1a1a", borderRadius:3, overflow:"hidden", marginBottom:8 }}>
                 <div style={{ width:`${pctE}%`, height:"100%", background:hColor, borderRadius:3 }}/>
               </div>
               <div style={{ display:"flex", gap:6, marginBottom:8, flexWrap:"wrap" }}>
@@ -2131,10 +2147,10 @@ function TrailerHistorial({ entity, tipo, onSave, onAddHistorial, onDeleteHistor
                 <button onClick={() => {
                   const msg = generarWppTrailer(entry);
                   window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank");
-                }} style={{ flex:1, padding:"7px 8px", borderRadius:8, background:"linear-gradient(135deg,#25d366,#128c7e)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                }} style={{ flex:1, padding:"7px 8px", borderRadius:8, background:"linear-gradient(135deg,#22c55e,#16a34a)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
                   💬 WhatsApp
                 </button>
-                <button onClick={() => exportarPDFTrailer(entry)} style={{ flex:1, padding:"7px 8px", borderRadius:8, background:"linear-gradient(135deg,#ef4444,#dc2626)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                <button onClick={() => exportarPDFTrailer(entry)} style={{ flex:1, padding:"7px 8px", borderRadius:8, background:"linear-gradient(135deg,#ef4444,#b91c1c)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
                   📄 PDF
                 </button>
                 <button onClick={() => { if(confirm("¿Eliminar este chequeo?")) onDeleteHistorial(origIdx); }}
@@ -2189,7 +2205,7 @@ function RepairStats({ repairs }) {
   }
 
   return (
-    <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, border:"1px solid #2a2a2a", marginBottom:14 }}>
+    <div style={{ background:"linear-gradient(145deg,#1b1b1b,#141414)", borderRadius:16, padding:16, border:"1px solid #222", marginBottom:14, boxShadow:"0 2px 12px rgba(0,0,0,0.3)" }}>
       <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", margin:"0 0 14px" }}>📊 Estadísticas de Reparaciones</h3>
       {/* Badges de estado */}
       {(() => {
@@ -2205,15 +2221,15 @@ function RepairStats({ repairs }) {
         ) : null;
       })()}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:14 }}>
-        <div style={{ background:"#111", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #2a2a2a" }}>
+        <div style={{ background:"#0f0f0f", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #1e1e1e" }}>
           <div style={{ color:"#a78bfa", fontWeight:900, fontSize:20 }}>{repairs.length}</div>
           <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase" }}>Trabajos</div>
         </div>
-        <div style={{ background:"#111", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #2a2a2a" }}>
+        <div style={{ background:"#0f0f0f", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #1e1e1e" }}>
           <div style={{ color:"#f97316", fontWeight:900, fontSize:16 }}>{formatMoney(total)}</div>
           <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase" }}>Total hist.</div>
         </div>
-        <div style={{ background:"#111", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #2a2a2a" }}>
+        <div style={{ background:"#0f0f0f", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #1e1e1e" }}>
           <div style={{ color:"#60a5fa", fontWeight:900, fontSize:16 }}>{formatMoney(totalAnio)}</div>
           <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase" }}>Último año</div>
         </div>
@@ -2423,7 +2439,7 @@ function Checks({ data, setPage, preselectedClientId }) {
       <div style={{ fontSize:64 }}>✅</div>
       <div style={{ color:"#10b981", fontWeight:900, fontSize:20 }}>Chequeo guardado</div>
       <button onClick={() => setPage(mode === "company" ? "company-detail" : "client-detail")}
-        style={{ marginTop:8, padding:"12px 28px", borderRadius:12, background:"#f9731622", border:"1px solid #f9731644", color:"#f97316", fontWeight:700, fontSize:14, cursor:"pointer" }}>
+        style={{ marginTop:8, padding:"12px 28px", borderRadius:12, background:"rgba(249,115,22,0.07)", border:"1px solid rgba(249,115,22,0.2)", color:"#f97316", fontWeight:700, fontSize:14, cursor:"pointer" }}>
         ← Volver
       </button>
       <button onClick={() => setPage("clients")}
@@ -2434,7 +2450,7 @@ function Checks({ data, setPage, preselectedClientId }) {
   );
 
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
       {/* Milestone stats modal */}
       {milestoneStats && (
         <div style={{ position:"fixed", inset:0, zIndex:200, background:"#000000cc", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}
@@ -2453,19 +2469,19 @@ function Checks({ data, setPage, preselectedClientId }) {
                 transition:"width 0.4s" }}/>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
-              <div style={{ background:"#10b98122", border:"1px solid #10b98144", borderRadius:12, padding:"10px", textAlign:"center" }}>
+              <div style={{ background:"rgba(16,185,129,0.07)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:12, padding:"10px", textAlign:"center" }}>
                 <div style={{ color:"#10b981", fontWeight:900, fontSize:22 }}>{milestoneStats.ok}</div>
                 <div style={{ color:"#6b7280", fontSize:11 }}>OK ✓</div>
               </div>
-              <div style={{ background:"#ef444422", border:"1px solid #ef444444", borderRadius:12, padding:"10px", textAlign:"center" }}>
+              <div style={{ background:"rgba(239,68,68,0.07)", border:"1px solid rgba(239,68,68,0.2)", borderRadius:12, padding:"10px", textAlign:"center" }}>
                 <div style={{ color:"#ef4444", fontWeight:900, fontSize:22 }}>{milestoneStats.critico}</div>
                 <div style={{ color:"#6b7280", fontSize:11 }}>Crítico ⚠️</div>
               </div>
-              <div style={{ background:"#f59e0b22", border:"1px solid #f59e0b44", borderRadius:12, padding:"10px", textAlign:"center" }}>
+              <div style={{ background:"rgba(245,158,11,0.07)", border:"1px solid rgba(245,158,11,0.2)", borderRadius:12, padding:"10px", textAlign:"center" }}>
                 <div style={{ color:"#f59e0b", fontWeight:900, fontSize:22 }}>{milestoneStats.prevencion}</div>
                 <div style={{ color:"#6b7280", fontSize:11 }}>Prevención</div>
               </div>
-              <div style={{ background:"#60a5fa22", border:"1px solid #60a5fa44", borderRadius:12, padding:"10px", textAlign:"center" }}>
+              <div style={{ background:"rgba(96,165,250,0.07)", border:"1px solid rgba(96,165,250,0.2)", borderRadius:12, padding:"10px", textAlign:"center" }}>
                 <div style={{ color:"#60a5fa", fontWeight:900, fontSize:22 }}>{milestoneStats.solicitar}</div>
                 <div style={{ color:"#6b7280", fontSize:11 }}>A Solicitar</div>
               </div>
@@ -2489,12 +2505,12 @@ function Checks({ data, setPage, preselectedClientId }) {
         </div>
       )}
 
-      <button onClick={() => preselectedClientId ? setPage("client-detail") : setPage("dashboard")} style={{ background:"none", border:"none", color:"#f97316", cursor:"pointer", fontSize:14, fontWeight:700, marginBottom:16, padding:0 }}>← Volver</button>
+      <button onClick={() => preselectedClientId ? setPage("client-detail") : setPage("dashboard")} style={{ background:"none", border:"none", color:"#c2400c", cursor:"pointer", fontSize:13, fontWeight:700, marginBottom:16, padding:"6px 0", letterSpacing:"0.04em" }}>← Volver</button>
       <h2 style={{ color:"#f97316", margin:"0 0 4px", fontSize:22, fontWeight:900 }}>Nuevo Chequeo</h2>
       <p style={{ color:"#6b7280", fontSize:13, margin:"0 0 20px" }}>Planilla ASN de Control Vehicular</p>
 
       {/* Selector cliente/empresa */}
-      <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, marginBottom:14, border:"1px solid #2a2a2a" }}>
+      <div style={{ background:"linear-gradient(145deg,#1c1c1c,#161616)", borderRadius:16, padding:16, marginBottom:14, border:"1px solid #232323", boxShadow:"0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.02)" }}>
         <h3 style={ST}>Tipo de titular</h3>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
           <button onClick={() => { setMode("client"); setCompanyId(""); setVehicleId(""); }}
@@ -2510,7 +2526,7 @@ function Checks({ data, setPage, preselectedClientId }) {
         {preselectedClientId && mode === "client" && (() => {
           const pre = data.clients.find(c => c.id === preselectedClientId);
           return pre ? (
-            <div style={{ background:"#f9731622", border:"1px solid #f9731644", borderRadius:10, padding:"10px 14px", marginBottom:4, display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ background:"rgba(249,115,22,0.07)", border:"1px solid rgba(249,115,22,0.2)", borderRadius:10, padding:"10px 14px", marginBottom:4, display:"flex", alignItems:"center", gap:10 }}>
               <span style={{ fontSize:18 }}>👤</span>
               <div style={{ flex:1 }}>
                 <div style={{ color:"#f97316", fontWeight:700, fontSize:13 }}>{pre.name}</div>
@@ -2533,7 +2549,7 @@ function Checks({ data, setPage, preselectedClientId }) {
                 {data.companies.map(c => <option key={c.id} value={c.id}>{c.name||"Sin nombre"}</option>)}
               </select>
               {companyId && companyVehicles.length === 0 && (
-                <div style={{ background:"#f9731622", border:"1px solid #f9731644", borderRadius:10, padding:"12px 14px", color:"#f97316", fontSize:13, fontWeight:600 }}>
+                <div style={{ background:"rgba(249,115,22,0.07)", border:"1px solid rgba(249,115,22,0.2)", borderRadius:10, padding:"12px 14px", color:"#f97316", fontSize:13, fontWeight:600 }}>
                   ⚠️ Esta empresa no tiene vehículos cargados. Andá a <strong>Empresas → [empresa] → Agregar vehículo</strong> primero.
                 </div>
               )}
@@ -2882,33 +2898,21 @@ function RepairsPage({ data, setPage }) {
     window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank");
   }
 
-
-    const msg = `🔧 *REPARACIÓN — ASN Control Vehicular*
-` +
-      (isClient ? `👤 Cliente: ${selected.name}
-` : `🏢 Empresa: ${selected.name}
-`) +
-      `🚗 Vehículo: ${selected.vehicle}
-🔖 Dominio: ${selected.plate}
-` +
-      (selected.nroMovil ? `🔢 Móvil: ${selected.nroMovil}
-` : "") +
-      `━━━━━━━━━━━━━━━━━━━━
-` +
-      `📋 ${r.descripcion}
-` +
-      `📂 Categoría: ${cat?.label || r.categoria}
-` +
-      `📅 Fecha: ${new Date(r.createdAt).toLocaleDateString("es-AR")}
-` +
-      `💰 Costo: ${formatMoney(r.costo)}
-` +
-      (r.taller ? `🏪 Taller: ${r.taller}
-` : "") +
-      (r.notas ? `📝 Notas: ${r.notas}
-` : "") +
-      `━━━━━━━━━━━━━━━━━━━━
-_ASN · Control y Prevención Vehicular_`;
+  function shareRepair(r) {
+    const isClient = selected.type === "client";
+    const cat = REPAIR_CATS.find(c => c.id === r.categoria);
+    const msg = `🔧 *REPARACIÓN — ASN Control Vehicular*\n` +
+      (isClient ? `👤 Cliente: ${selected.name}\n` : `🏢 Empresa: ${selected.name}\n`) +
+      `🚗 Vehículo: ${selected.vehicle}\n🔖 Dominio: ${selected.plate}\n` +
+      (selected.nroMovil ? `🔢 Móvil: ${selected.nroMovil}\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📋 ${r.descripcion}\n` +
+      `📂 Categoría: ${cat?.label || r.categoria}\n` +
+      `📅 Fecha: ${new Date(r.createdAt).toLocaleDateString("es-AR")}\n` +
+      `💰 Costo: ${formatMoney(r.costo)}\n` +
+      (r.taller ? `🏪 Taller: ${r.taller}\n` : "") +
+      (r.notas ? `📝 Notas: ${r.notas}\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━\n_ASN · Control y Prevención Vehicular_`;
     window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank");
   }
 
@@ -2930,12 +2934,12 @@ _ASN · Control y Prevención Vehicular_`;
   }, [data]);
 
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
       <button onClick={() => selected ? setSelected(null) : setPage("dashboard")}
-        style={{ background:"none", border:"none", color:"#a78bfa", cursor:"pointer", fontSize:14, fontWeight:700, marginBottom:16, padding:0 }}>
+        style={{ background:"none", border:"none", color:"#7c3aed", cursor:"pointer", fontSize:13, fontWeight:700, marginBottom:16, padding:"6px 0", letterSpacing:"0.04em" }}>
         ← {selected ? "Buscar otro" : "Volver"}
       </button>
-      <h2 style={{ color:"#a78bfa", margin:"0 0 4px", fontSize:22, fontWeight:900 }}>🔧 Reparaciones</h2>
+      <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#a78bfa", margin:"0 0 4px", fontSize:26, fontWeight:900, letterSpacing:"0.03em", textTransform:"uppercase" }}>🔧 Reparaciones</h2>
       <p style={{ color:"#6b7280", fontSize:13, margin:"0 0 20px" }}>Historial y pedidos por vehículo</p>
 
       {!selected ? (
@@ -3044,7 +3048,7 @@ _ASN · Control y Prevención Vehicular_`;
           ) : (
             <>
           {stats && (
-            <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, border:"1px solid #2a2a2a", marginBottom:14 }}>
+            <div style={{ background:"linear-gradient(145deg,#1b1b1b,#141414)", borderRadius:16, padding:16, border:"1px solid #222", marginBottom:14, boxShadow:"0 2px 12px rgba(0,0,0,0.3)" }}>
               <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", margin:"0 0 14px" }}>📊 Estadísticas del vehículo</h3>
 
               {/* Salud mecánica del último chequeo */}
@@ -3066,15 +3070,15 @@ _ASN · Control y Prevención Vehicular_`;
 
               {/* Costos reparaciones */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
-                <div style={{ background:"#111", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #2a2a2a" }}>
+                <div style={{ background:"#0f0f0f", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #1e1e1e" }}>
                   <div style={{ color:"#a78bfa", fontWeight:900, fontSize:20 }}>{selected.repairs.length}</div>
                   <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase" }}>Trabajos</div>
                 </div>
-                <div style={{ background:"#111", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #2a2a2a" }}>
+                <div style={{ background:"#0f0f0f", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #1e1e1e" }}>
                   <div style={{ color:"#f97316", fontWeight:900, fontSize:14 }}>{formatMoney(stats.total)}</div>
                   <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase" }}>Total hist.</div>
                 </div>
-                <div style={{ background:"#111", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #2a2a2a" }}>
+                <div style={{ background:"#0f0f0f", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #1e1e1e" }}>
                   <div style={{ color:"#60a5fa", fontWeight:900, fontSize:14 }}>{formatMoney(stats.totalAnio)}</div>
                   <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase" }}>Último año</div>
                 </div>
@@ -3153,10 +3157,10 @@ function MaquinariaList({ data, setPage, setSelectedMaquina }) {
     (m.nroInterno||"").toLowerCase().includes(search.toLowerCase())
   );
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
-      <h2 style={{ color:"#a78bfa", margin:"0 0 16px", fontSize:22, fontWeight:900 }}>🏗️ Maquinaria Pesada</h2>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#a78bfa", margin:"0 0 16px", fontSize:26, fontWeight:900, letterSpacing:"0.03em", textTransform:"uppercase" }}>🏗️ Maquinaria Pesada</h2>
       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, empresa, dominio, chasis o serie..."
-        style={{ width:"100%", padding:"12px 16px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, marginBottom:16, outline:"none" }}/>
+        style={{ width:"100%", padding:"12px 16px", borderRadius:12, background:"#111", border:"1px solid #2a2a2a", color:"#e5e7eb", fontSize:14, marginBottom:16, outline:"none", boxShadow:"inset 0 1px 3px rgba(0,0,0,0.3)" }}/>
       {filtered.length === 0 && (
         <div style={{ textAlign:"center", color:"#4b5563", padding:"40px 0" }}>
           <div style={{ fontSize:48, marginBottom:12 }}>🏗️</div>
@@ -3167,8 +3171,8 @@ function MaquinariaList({ data, setPage, setSelectedMaquina }) {
         const tipo = MAQUINA_TIPOS.find(t => t.id === m.tipo);
         return (
           <div key={m.id} onClick={() => { setSelectedMaquina(m); setPage("maquina-detail"); }}
-            style={{ background:"#1a1a1a", borderRadius:16, padding:"14px 16px", border:"1px solid #2a2a2a", cursor:"pointer", display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:"#a78bfa22", border:"1px solid #a78bfa55", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
+            style={{ background:"linear-gradient(145deg,#1a1a1a,#151515)", borderRadius:16, padding:"14px 16px", border:"1px solid #252525", cursor:"pointer", display:"flex", alignItems:"center", gap:12, marginBottom:10, boxShadow:"0 2px 12px rgba(0,0,0,0.3)", transition:"border-color 0.2s" }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:"rgba(167,139,250,0.08)", border:"1px solid rgba(167,139,250,0.22)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0, boxShadow:"0 0 12px rgba(167,139,250,0.1)" }}>
               {tipo?.icon || "⚙️"}
             </div>
             <div style={{ flex:1, minWidth:0 }}>
@@ -3191,7 +3195,7 @@ function MaquinariaList({ data, setPage, setSelectedMaquina }) {
         );
       })}
       <button onClick={() => setPage("new-maquina")}
-        style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#7c3aed,#6d28d9)", border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:15, marginTop:8 }}>
+        style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#7c3aed,#5b21b6)", border:"none", color:"#fff", borderRadius:12, cursor:"pointer", fontWeight:800, fontSize:14, marginTop:8, letterSpacing:"0.06em", textTransform:"uppercase", boxShadow:"0 4px 20px rgba(124,58,237,0.3), inset 0 1px 0 rgba(255,255,255,0.1)" }}>
         + Nueva Máquina
       </button>
     </div>
@@ -3244,8 +3248,8 @@ function NewMaquina({ setPage, data }) {
     </div>
   );
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
-      <button onClick={() => setPage("maquinaria")} style={{ background:"none", border:"none", color:"#a78bfa", cursor:"pointer", fontSize:14, fontWeight:700, marginBottom:16, padding:0 }}>← Volver</button>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <button onClick={() => setPage("maquinaria")} style={{ background:"none", border:"none", color:"#7c3aed", cursor:"pointer", fontSize:13, fontWeight:700, marginBottom:16, padding:"6px 0", letterSpacing:"0.04em" }}>← Volver</button>
       <h2 style={{ color:"#a78bfa", margin:"0 0 20px", fontSize:22, fontWeight:900 }}>Nueva Máquina</h2>
       <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
 
@@ -3295,7 +3299,7 @@ function NewMaquina({ setPage, data }) {
           {empresaOpcion === "ninguna" && (
             <input value={form.cantera} onChange={e => set("cantera", e.target.value)}
               placeholder="Empresa / Operador (ej: Metalúrgica San Martín)"
-              style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+              style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#111", border:"1px solid #2a2a2a", color:"#e5e7eb", fontSize:14, outline:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
           )}
         </div>
 
@@ -3307,16 +3311,16 @@ function NewMaquina({ setPage, data }) {
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             <input value={form.dominio} onChange={e => set("dominio", e.target.value.toUpperCase())}
               placeholder="🔖 Dominio / Patente (si aplica)"
-              style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+              style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#111", border:"1px solid #2a2a2a", color:"#e5e7eb", fontSize:14, outline:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
             <input value={form.nroChasis} onChange={e => set("nroChasis", e.target.value.toUpperCase())}
               placeholder="🔩 Número de chasis (si aplica)"
-              style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+              style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#111", border:"1px solid #2a2a2a", color:"#e5e7eb", fontSize:14, outline:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
             <input value={form.nroSerie} onChange={e => set("nroSerie", e.target.value.toUpperCase())}
               placeholder="🔢 Número de serie (si aplica)"
-              style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+              style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#111", border:"1px solid #2a2a2a", color:"#e5e7eb", fontSize:14, outline:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
             <input value={form.nroInterno} onChange={e => set("nroInterno", e.target.value)}
               placeholder="🏷️ Número interno (si aplica)"
-              style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+              style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#111", border:"1px solid #2a2a2a", color:"#e5e7eb", fontSize:14, outline:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
           </div>
           <div style={{ color:"#4b5563", fontSize:11, marginTop:6 }}>Completá al menos uno de los campos de identificación.</div>
         </div>
@@ -3327,7 +3331,7 @@ function NewMaquina({ setPage, data }) {
         <div>
           <label style={{ color:"#9ca3af", fontSize:12, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Notas (opcional)</label>
           <textarea value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Observaciones sobre la máquina..." rows={3}
-            style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none" }}/>
+            style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#0f0f0f", border:"1px solid #252525", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
         </div>
         <button onClick={handleSave} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#7c3aed,#6d28d9)", border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:16, marginTop:8 }}>
           Guardar Máquina
@@ -3410,7 +3414,7 @@ function MaquinaCheckForm({ maquina, onSave, onCancel }) {
       <div style={{ marginBottom:14 }}>
         <label style={{ color:"#9ca3af", fontSize:12, fontWeight:700, textTransform:"uppercase", display:"block", marginBottom:8 }}>Recomendaciones</label>
         <textarea value={recomendaciones} onChange={e => setRecomendaciones(e.target.value)} placeholder="Observaciones y recomendaciones de mantenimiento..." rows={3}
-          style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none" }}/>
+          style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#0f0f0f", border:"1px solid #252525", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
       </div>
 
       <div style={{ display:"flex", gap:10 }}>
@@ -3623,8 +3627,8 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
   const health = lastCheck ? getHealth(lastCheck) : null;
 
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
-      <button onClick={() => setPage("maquinaria")} style={{ background:"none", border:"none", color:"#a78bfa", cursor:"pointer", fontSize:14, fontWeight:700, marginBottom:16, padding:0 }}>← Volver</button>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <button onClick={() => setPage("maquinaria")} style={{ background:"none", border:"none", color:"#7c3aed", cursor:"pointer", fontSize:13, fontWeight:700, marginBottom:16, padding:"6px 0", letterSpacing:"0.04em" }}>← Volver</button>
 
       {/* Header */}
       <div style={{ background:"#1a1a1a", borderRadius:20, padding:20, border:"1px solid #a78bfa44", marginBottom:16 }}>
@@ -3723,10 +3727,10 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
                       </div>
                     )}
                     <div style={{ display:"flex", gap:8, marginTop:10 }}>
-                      <button onClick={() => enviarWppCheck(ch, idx)} style={{ flex:1, padding:"9px 6px", borderRadius:10, background:"linear-gradient(135deg,#25d366,#128c7e)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                      <button onClick={() => enviarWppCheck(ch, idx)} style={{ flex:1, padding:"9px 6px", borderRadius:10, background:"linear-gradient(135deg,#22c55e,#16a34a)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
                         💬 WhatsApp
                       </button>
-                      <button onClick={() => exportarPDFMaquina(ch)} style={{ flex:1, padding:"9px 6px", borderRadius:10, background:"linear-gradient(135deg,#ef4444,#dc2626)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                      <button onClick={() => exportarPDFMaquina(ch)} style={{ flex:1, padding:"9px 6px", borderRadius:10, background:"linear-gradient(135deg,#ef4444,#b91c1c)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
                         📄 PDF
                       </button>
                       <button onClick={() => deleteCheck(ch.createdAt)} style={{ padding:"9px 12px", borderRadius:10, background:"transparent", border:"1px solid #ef444433", color:"#ef4444", fontWeight:700, fontSize:13, cursor:"pointer" }}>
@@ -3753,7 +3757,7 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
         </>
       )}
 
-      <button onClick={deleteMaquina} style={{ width:"100%", marginTop:8, padding:"14px", background:"#1a1a1a", border:"1px solid #ef444444", color:"#ef4444", borderRadius:14, cursor:"pointer", fontWeight:700, fontSize:14 }}>
+      <button onClick={deleteMaquina} style={{ width:"100%", marginTop:8, padding:"13px", background:"rgba(239,68,68,0.04)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", borderRadius:12, cursor:"pointer", fontWeight:700, fontSize:13, letterSpacing:"0.06em" }}>
         🗑️ Eliminar máquina
       </button>
     </div>
@@ -4080,7 +4084,7 @@ function GpsConfigModal({ entidad, tipo, onSave, onClose }) {
 
         {/* Campos específicos del proveedor */}
         {selectedProv && (
-          <div style={{ background:"#0d0d0d", borderRadius:16, padding:16, marginBottom:14,
+          <div style={{ background:"#080808", borderRadius:16, padding:16, marginBottom:14,
             border:`1px solid ${selectedProv.color}33` }}>
             <div style={{ color:selectedProv.color, fontSize:11, fontWeight:700,
               textTransform:"uppercase", marginBottom:12 }}>
@@ -4103,7 +4107,7 @@ function GpsConfigModal({ entidad, tipo, onSave, onClose }) {
         )}
 
         {/* KM / Horas actuales */}
-        <div style={{ background:"#0d0d0d", borderRadius:16, padding:16, marginBottom:14, border:"1px solid #10b98133" }}>
+        <div style={{ background:"#080808", borderRadius:16, padding:16, marginBottom:14, border:"1px solid #10b98133" }}>
           <div style={{ color:"#10b981", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:12 }}>
             📍 Datos del GPS (actuales)
           </div>
@@ -4260,7 +4264,7 @@ function GpsEntidadCard({ entidad, tipo, onConfigClick, onWhatsApp }) {
 
       {/* Alertas */}
       {sinConfig ? (
-        <div style={{ background:"#0d0d0d", borderRadius:10, padding:"10px 12px",
+        <div style={{ background:"#080808", borderRadius:10, padding:"10px 12px",
           color:"#4b5563", fontSize:12, textAlign:"center", marginBottom:10 }}>
           📡 Sin configuración GPS — tocá "Configurar" para activar las alertas
         </div>
@@ -4270,7 +4274,7 @@ function GpsEntidadCard({ entidad, tipo, onConfigClick, onWhatsApp }) {
             const aType = ALERT_TYPES.find(t => t.id === a.tipo);
             return (
               <div key={i} style={{ display:"flex", alignItems:"center", gap:8,
-                padding:"7px 10px", borderRadius:10, background:"#0d0d0d", border:"1px solid #2a2a2a" }}>
+                padding:"7px 10px", borderRadius:10, background:"#080808", border:"1px solid #2a2a2a" }}>
                 <span style={{ fontSize:14 }}>{aType?.icon}</span>
                 <span style={{ color:"#9ca3af", fontSize:12, flex:1 }}>{a.msg}</span>
                 <AlertBadge nivel={a.nivel}/>
@@ -4290,7 +4294,7 @@ function GpsEntidadCard({ entidad, tipo, onConfigClick, onWhatsApp }) {
         {!sinConfig && (criticos.length > 0 || prevencion.length > 0) && (
           <button onClick={onWhatsApp}
             style={{ flex:2, padding:"9px", borderRadius:10,
-              background:"linear-gradient(135deg,#25d366,#128c7e)",
+              background:"linear-gradient(135deg,#22c55e,#16a34a)",
               border:"none", color:"#fff", fontWeight:900, fontSize:12, cursor:"pointer" }}>
             📲 Enviar alerta WhatsApp
           </button>
@@ -4374,22 +4378,22 @@ function InformeFlotas({ data, setPage }) {
   }
 
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
       <button onClick={() => setPage("gps")} style={{ background:"none", border:"none", color:"#10b981", cursor:"pointer", fontSize:14, fontWeight:700, marginBottom:16, padding:0 }}>← Volver</button>
       <h2 style={{ color:"#f59e0b", margin:"0 0 4px", fontSize:22, fontWeight:900 }}>📋 Informe de Flotas</h2>
       <p style={{ color:"#6b7280", fontSize:13, margin:"0 0 16px" }}>Estado de todas las empresas con GPS</p>
 
       {/* Resumen */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:20 }}>
-        <div style={{ background:"#ef444422", border:"1px solid #ef444444", borderRadius:14, padding:"12px 8px", textAlign:"center" }}>
+        <div style={{ background:"rgba(239,68,68,0.07)", border:"1px solid rgba(239,68,68,0.2)", borderRadius:14, padding:"12px 8px", textAlign:"center" }}>
           <div style={{ color:"#ef4444", fontWeight:900, fontSize:22 }}>{totalCriticos}</div>
           <div style={{ color:"#ef4444", fontSize:10, fontWeight:700 }}>CRÍTICOS</div>
         </div>
-        <div style={{ background:"#f59e0b22", border:"1px solid #f59e0b44", borderRadius:14, padding:"12px 8px", textAlign:"center" }}>
+        <div style={{ background:"rgba(245,158,11,0.07)", border:"1px solid rgba(245,158,11,0.2)", borderRadius:14, padding:"12px 8px", textAlign:"center" }}>
           <div style={{ color:"#f59e0b", fontWeight:900, fontSize:22 }}>{totalPrevencion}</div>
           <div style={{ color:"#f59e0b", fontSize:10, fontWeight:700 }}>PREVENCIÓN</div>
         </div>
-        <div style={{ background:"#10b98122", border:"1px solid #10b98144", borderRadius:14, padding:"12px 8px", textAlign:"center" }}>
+        <div style={{ background:"rgba(16,185,129,0.07)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:14, padding:"12px 8px", textAlign:"center" }}>
           <div style={{ color:"#10b981", fontWeight:900, fontSize:22 }}>{totalOk}</div>
           <div style={{ color:"#10b981", fontSize:10, fontWeight:700 }}>OK</div>
         </div>
@@ -4399,7 +4403,7 @@ function InformeFlotas({ data, setPage }) {
         ? <div style={{ textAlign:"center", color:"#4b5563", padding:"40px 0" }}>
             <div style={{ fontSize:48, marginBottom:12 }}>🏢</div>
             <div>No hay empresas con vehículos registrados</div>
-            <button onClick={() => setPage("companies")} style={{ marginTop:12, padding:"10px 20px", borderRadius:10, background:"#60a5fa22", border:"1px solid #60a5fa44", color:"#60a5fa", fontWeight:700, cursor:"pointer", fontSize:13 }}>
+            <button onClick={() => setPage("companies")} style={{ marginTop:12, padding:"10px 20px", borderRadius:10, background:"rgba(96,165,250,0.07)", border:"1px solid rgba(96,165,250,0.2)", color:"#60a5fa", fontWeight:700, cursor:"pointer", fontSize:13 }}>
               → Ir a Empresas
             </button>
           </div>
@@ -4520,7 +4524,7 @@ function GpsAlertas({ data, setPage }) {
   }
 
   return (
-    <div style={{ padding:"16px 16px 100px" }}>
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
       {/* Título */}
       <div style={{ marginBottom:16 }}>
         <h2 style={{ color:"#10b981", margin:"0 0 4px", fontSize:22, fontWeight:900 }}>📡 GPS & Alertas</h2>
@@ -4535,17 +4539,17 @@ function GpsAlertas({ data, setPage }) {
 
       {/* Resumen global */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:16 }}>
-        <div style={{ background:"#ef444422", border:"1px solid #ef444444", borderRadius:14,
+        <div style={{ background:"rgba(239,68,68,0.07)", border:"1px solid rgba(239,68,68,0.2)", borderRadius:14,
           padding:"12px 8px", textAlign:"center" }}>
           <div style={{ color:"#ef4444", fontWeight:900, fontSize:22 }}>{totalCriticos}</div>
           <div style={{ color:"#ef4444", fontSize:10, fontWeight:700 }}>CRÍTICOS</div>
         </div>
-        <div style={{ background:"#f59e0b22", border:"1px solid #f59e0b44", borderRadius:14,
+        <div style={{ background:"rgba(245,158,11,0.07)", border:"1px solid rgba(245,158,11,0.2)", borderRadius:14,
           padding:"12px 8px", textAlign:"center" }}>
           <div style={{ color:"#f59e0b", fontWeight:900, fontSize:22 }}>{totalPrevencion}</div>
           <div style={{ color:"#f59e0b", fontSize:10, fontWeight:700 }}>PREVENCIÓN</div>
         </div>
-        <div style={{ background:"#10b98122", border:"1px solid #10b98144", borderRadius:14,
+        <div style={{ background:"rgba(16,185,129,0.07)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:14,
           padding:"12px 8px", textAlign:"center" }}>
           <div style={{ color:"#10b981", fontWeight:900, fontSize:22 }}>{vehicles.length + maquinas.length}</div>
           <div style={{ color:"#10b981", fontSize:10, fontWeight:700 }}>UNIDADES</div>
@@ -4553,7 +4557,7 @@ function GpsAlertas({ data, setPage }) {
       </div>
 
       {/* Info webhook */}
-      <div style={{ background:"#0d0d0d", borderRadius:14, padding:"12px 14px",
+      <div style={{ background:"#080808", borderRadius:14, padding:"12px 14px",
         border:"1px solid #10b98133", marginBottom:16, display:"flex", gap:10, alignItems:"flex-start" }}>
         <span style={{ fontSize:20 }}>🔗</span>
         <div>
@@ -4696,37 +4700,40 @@ function App() {
   }, [firebaseReady]);
 
   if (!firebaseReady || loading) return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", gap:20, background:"#0d0d0d" }}>
-      <ASNLogo size={110}/>
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", gap:20, background:"radial-gradient(ellipse at center, #111 0%, #060606 70%)" }}>
+      <div style={{ position:"relative" }}>
+        <div style={{ position:"absolute", inset:-20, borderRadius:"50%", background:"radial-gradient(circle, rgba(249,115,22,0.08) 0%, transparent 70%)" }}/>
+        <ASNLogo size={110}/>
+      </div>
       <div style={{ textAlign:"center" }}>
-        <div style={{ color:"#f0f2f5", fontWeight:900, fontSize:22, fontFamily:"'Arial Black',sans-serif", letterSpacing:"-0.5px", marginBottom:4 }}>
-          <span style={{ color:"#d4d8de" }}>AS</span><span style={{ color:"#f97316" }}>N</span>
+        <div style={{ fontFamily:"'Barlow Condensed',system-ui,sans-serif", fontWeight:900, fontSize:26, letterSpacing:"0.05em", marginBottom:4 }}>
+          <span style={{ color:"#c8cdd4" }}>AS</span><span style={{ color:"#f97316" }}>N</span>
         </div>
-        <div style={{ color:"#6b7280", fontSize:11, letterSpacing:"0.15em", textTransform:"uppercase" }}>Control y Prevención Vehicular</div>
+        <div style={{ color:"#3d4451", fontSize:10, letterSpacing:"0.22em", textTransform:"uppercase", fontWeight:600 }}>Control y Prevención Vehicular</div>
       </div>
-      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, marginTop:8 }}>
-        <div style={{ width:40, height:3, borderRadius:2, background:"linear-gradient(90deg,#f97316,#ea580c)", animation:"pulse 1.2s ease-in-out infinite" }}/>
-        <div style={{ color:"#4b5563", fontSize:12 }}>Conectando...</div>
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, marginTop:4 }}>
+        <div style={{ width:48, height:2, borderRadius:2, background:"linear-gradient(90deg,#f97316,#ea580c)", animation:"pulsebar 1.2s ease-in-out infinite", boxShadow:"0 0 10px rgba(249,115,22,0.4)" }}/>
+        <div style={{ color:"#3d4451", fontSize:11, letterSpacing:"0.08em" }}>CONECTANDO...</div>
       </div>
-      <style>{`@keyframes pulse { 0%,100%{opacity:0.4;transform:scaleX(0.6)} 50%{opacity:1;transform:scaleX(1)} }`}</style>
+      <style>{`@keyframes pulsebar { 0%,100%{opacity:0.4;transform:scaleX(0.5)} 50%{opacity:1;transform:scaleX(1)} }`}</style>
     </div>
   );
 
   const totalEntities = data.clients.length + data.companies.reduce((a,c) => a + (c.vehicles||[]).length, 0);
 
   return (
-    <div style={{ minHeight:"100vh", background:"#0d0d0d", fontFamily:"'Segoe UI', system-ui, sans-serif", color:"#e5e7eb" }}>
-      <div style={{ background:"linear-gradient(135deg,#0d0d0d,#141414)", borderBottom:"1px solid #1f1f1f", padding:"12px 16px 10px", display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:50, boxShadow:"0 2px 20px rgba(0,0,0,0.6)" }}>
-        <ASNLogo size={42}/>
+    <div style={{ minHeight:"100vh", background:"#080808", fontFamily:"'Barlow', system-ui, sans-serif", color:"#e8eaed" }}>
+      <div style={{ background:"linear-gradient(180deg,#111,#0a0a0a)", borderBottom:"1px solid rgba(249,115,22,0.15)", padding:"10px 16px 9px", display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:50, boxShadow:"0 2px 32px rgba(0,0,0,0.9), 0 1px 0 rgba(249,115,22,0.08)" }}>
+        <ASNLogo size={40}/>
         <div>
-          <div style={{ color:"#f0f2f5", fontWeight:900, fontSize:17, lineHeight:1, fontFamily:"'Arial Black',sans-serif", letterSpacing:"-0.5px" }}>
-            <span style={{ color:"#d4d8de" }}>AS</span><span style={{ color:"#f97316" }}>N</span>
+          <div style={{ fontFamily:"'Barlow Condensed',system-ui,sans-serif", fontWeight:900, fontSize:21, lineHeight:1, letterSpacing:"0.02em" }}>
+            <span style={{ color:"#c8cdd4" }}>AS</span><span style={{ color:"#f97316" }}>N</span>
           </div>
-          <div style={{ color:"#6b7280", fontSize:9, letterSpacing:"0.12em", textTransform:"uppercase", marginTop:1 }}>Control y Prevención Vehicular</div>
+          <div style={{ color:"#3d4451", fontSize:8, letterSpacing:"0.2em", textTransform:"uppercase", marginTop:2, fontWeight:600 }}>Control · Prevención Vehicular</div>
         </div>
         <div style={{ flex:1 }}/>
-        <div style={{ background:"linear-gradient(135deg,#f9731618,#ea580c18)", border:"1px solid #f9731640", borderRadius:20, padding:"4px 12px", color:"#f97316", fontSize:11, fontWeight:700 }}>{totalEntities} vehículos</div>
-        <div style={{ background:"#10b98118", border:"1px solid #10b98140", borderRadius:20, padding:"4px 8px", color:"#10b981", fontSize:11, fontWeight:700 }}>☁️</div>
+        <div style={{ background:"rgba(249,115,22,0.07)", border:"1px solid rgba(249,115,22,0.2)", borderRadius:20, padding:"4px 12px", color:"#f97316", fontSize:10, fontWeight:800, letterSpacing:"0.08em" }}>{totalEntities} VEH</div>
+        <div style={{ width:28, height:28, borderRadius:8, background:"rgba(16,185,129,0.07)", border:"1px solid rgba(16,185,129,0.2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>☁️</div>
       </div>
 
       {page === "dashboard"      && <Dashboard data={data} setPage={setPage}/>}

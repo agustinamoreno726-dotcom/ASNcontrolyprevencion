@@ -360,6 +360,7 @@ function StatCard({ icon, value, label, color, sub }) {
 
 function Dashboard({ data, setPage }) {
   const { clients, checks, companies } = data;
+  const [flotaModal, setFlotaModal] = useState(false);
   const totalClients   = clients.length;
   const totalChecks    = checks.length;
   const totalCompanies = companies.length;
@@ -470,20 +471,111 @@ function Dashboard({ data, setPage }) {
       )}
 
       {/* Salud de la flota */}
-      {globalOk !== null && (
-        <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, marginBottom:14, border:"1px solid #2a2a2a" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
-            <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", margin:0 }}>Salud de la flota</h3>
-            <span style={{ color: globalOk >= 80 ? "#10b981" : globalOk >= 60 ? "#f59e0b" : "#ef4444", fontWeight:900, fontSize:18 }}>{globalOk}%</span>
-          </div>
-          <div style={{ width:"100%", height:10, background:"#2a2a2a", borderRadius:5, overflow:"hidden" }}>
-            <div style={{ width:`${globalOk}%`, height:"100%", background: globalOk >= 80 ? "linear-gradient(90deg,#10b981,#059669)" : globalOk >= 60 ? "linear-gradient(90deg,#f59e0b,#d97706)" : "linear-gradient(90deg,#ef4444,#dc2626)", borderRadius:5, transition:"width 0.8s" }}/>
-          </div>
-          <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, fontSize:11, color:"#4b5563" }}>
-            <span>0%</span><span>Basado en {checks.length} chequeos</span><span>100%</span>
-          </div>
-        </div>
-      )}
+      {globalOk !== null && (() => {
+        const allItems = CHECK_SECTIONS.flatMap(s => s.items);
+        const totalItems = checks.length * allItems.length;
+        const totalOkCount = checks.reduce((acc, ch) => acc + allItems.filter(i => (ch.itemStates||{})[i.id] === "ok").length, 0);
+        const totalCriticoCount = checks.reduce((acc, ch) => acc + allItems.filter(i => (ch.itemStates||{})[i.id] === "critico").length, 0);
+        const totalPrevencionCount = checks.reduce((acc, ch) => acc + allItems.filter(i => (ch.itemStates||{})[i.id] === "prevencion").length, 0);
+        const totalSolicitarCount = checks.reduce((acc, ch) => acc + allItems.filter(i => (ch.itemStates||{})[i.id] === "solicitar").length, 0);
+        const healthColor = globalOk >= 80 ? "#10b981" : globalOk >= 60 ? "#f59e0b" : "#ef4444";
+        const healthLabel = globalOk >= 80 ? "Flota en buen estado" : globalOk >= 60 ? "Requiere atención" : "Estado crítico";
+        return (
+          <>
+            <div onClick={() => setFlotaModal(true)} style={{ background:"#1a1a1a", borderRadius:16, padding:16, marginBottom:14, border:`1px solid ${healthColor}44`, cursor:"pointer" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
+                <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", margin:0 }}>Salud de la flota</h3>
+                <span style={{ color:healthColor, fontWeight:900, fontSize:18 }}>{globalOk}%</span>
+              </div>
+              <div style={{ width:"100%", height:10, background:"#2a2a2a", borderRadius:5, overflow:"hidden" }}>
+                <div style={{ width:`${globalOk}%`, height:"100%", background: globalOk >= 80 ? "linear-gradient(90deg,#10b981,#059669)" : globalOk >= 60 ? "linear-gradient(90deg,#f59e0b,#d97706)" : "linear-gradient(90deg,#ef4444,#dc2626)", borderRadius:5, transition:"width 0.8s" }}/>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, fontSize:11 }}>
+                <span style={{ color:healthColor, fontWeight:700 }}>{healthLabel}</span>
+                <span style={{ color:"#4b5563" }}>Tocá para ver detalles →</span>
+              </div>
+            </div>
+
+            {flotaModal && (
+              <div style={{ position:"fixed", inset:0, zIndex:200, background:"#000000cc", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}
+                onClick={() => setFlotaModal(false)}>
+                <div style={{ background:"#1a1a1a", borderRadius:24, padding:24, border:`1px solid ${healthColor}44`, width:"100%", maxWidth:380, maxHeight:"80vh", overflowY:"auto" }}
+                  onClick={e => e.stopPropagation()}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+                    <h3 style={{ color:"#e5e7eb", fontWeight:900, fontSize:17, margin:0 }}>📊 Salud de la flota</h3>
+                    <button onClick={() => setFlotaModal(false)} style={{ background:"none", border:"none", color:"#6b7280", fontSize:20, cursor:"pointer" }}>✕</button>
+                  </div>
+
+                  {/* Porcentaje grande */}
+                  <div style={{ textAlign:"center", marginBottom:20 }}>
+                    <div style={{ fontSize:56, fontWeight:900, color:healthColor, lineHeight:1 }}>{globalOk}%</div>
+                    <div style={{ color:healthColor, fontWeight:700, fontSize:14, marginTop:4 }}>{healthLabel}</div>
+                    <div style={{ color:"#6b7280", fontSize:12, marginTop:2 }}>Promedio de {checks.length} chequeo{checks.length !== 1 ? "s" : ""} registrado{checks.length !== 1 ? "s" : ""}</div>
+                  </div>
+
+                  {/* Barra */}
+                  <div style={{ width:"100%", height:12, background:"#2a2a2a", borderRadius:6, overflow:"hidden", marginBottom:20 }}>
+                    <div style={{ width:`${globalOk}%`, height:"100%", background: globalOk >= 80 ? "linear-gradient(90deg,#10b981,#059669)" : globalOk >= 60 ? "linear-gradient(90deg,#f59e0b,#d97706)" : "linear-gradient(90deg,#ef4444,#dc2626)", borderRadius:6 }}/>
+                  </div>
+
+                  {/* Cómo se calcula */}
+                  <div style={{ background:"#111", borderRadius:14, padding:14, marginBottom:16 }}>
+                    <div style={{ color:"#9ca3af", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>¿Cómo se calcula?</div>
+                    <div style={{ color:"#6b7280", fontSize:12, lineHeight:1.6 }}>
+                      Se toma el total de ítems marcados como <span style={{ color:"#10b981", fontWeight:700 }}>OK</span> sobre el total de ítems relevados en todos los chequeos. Cada chequeo tiene {allItems.length} ítems posibles.
+                    </div>
+                  </div>
+
+                  {/* Desglose */}
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
+                    <div style={{ background:"#10b98122", border:"1px solid #10b98144", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
+                      <div style={{ color:"#10b981", fontWeight:900, fontSize:22 }}>{totalOkCount}</div>
+                      <div style={{ color:"#10b981", fontSize:10, fontWeight:700, textTransform:"uppercase" }}>✅ OK</div>
+                    </div>
+                    <div style={{ background:"#ef444422", border:"1px solid #ef444444", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
+                      <div style={{ color:"#ef4444", fontWeight:900, fontSize:22 }}>{totalCriticoCount}</div>
+                      <div style={{ color:"#ef4444", fontSize:10, fontWeight:700, textTransform:"uppercase" }}>🔴 Crítico</div>
+                    </div>
+                    <div style={{ background:"#f59e0b22", border:"1px solid #f59e0b44", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
+                      <div style={{ color:"#f59e0b", fontWeight:900, fontSize:22 }}>{totalPrevencionCount}</div>
+                      <div style={{ color:"#f59e0b", fontSize:10, fontWeight:700, textTransform:"uppercase" }}>🟡 Prevención</div>
+                    </div>
+                    <div style={{ background:"#60a5fa22", border:"1px solid #60a5fa44", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
+                      <div style={{ color:"#60a5fa", fontWeight:900, fontSize:22 }}>{totalSolicitarCount}</div>
+                      <div style={{ color:"#60a5fa", fontSize:10, fontWeight:700, textTransform:"uppercase" }}>🔵 Solicitar</div>
+                    </div>
+                  </div>
+
+                  {/* Explicación colores */}
+                  <div style={{ background:"#111", borderRadius:14, padding:14, marginBottom:16 }}>
+                    <div style={{ color:"#9ca3af", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>¿Qué significa cada color?</div>
+                    {[
+                      { color:"#10b981", icon:"🟢", label:"Verde ≥ 80%", desc:"Flota en buen estado general. Mantenimiento preventivo al día." },
+                      { color:"#f59e0b", icon:"🟡", label:"Amarillo 60–79%", desc:"Hay ítems que requieren atención. Programar revisiones." },
+                      { color:"#ef4444", icon:"🔴", label:"Rojo < 60%", desc:"Estado crítico. Varios vehículos con problemas que necesitan atención urgente." },
+                    ].map(r => (
+                      <div key={r.label} style={{ display:"flex", gap:10, marginBottom:10 }}>
+                        <span style={{ fontSize:16, flexShrink:0 }}>{r.icon}</span>
+                        <div>
+                          <div style={{ color:r.color, fontWeight:700, fontSize:12 }}>{r.label}</div>
+                          <div style={{ color:"#6b7280", fontSize:11, lineHeight:1.5 }}>{r.desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ color:"#4b5563", fontSize:11, textAlign:"center" }}>
+                    Total de ítems relevados: {totalItems} · OK: {totalOkCount}
+                  </div>
+                  <button onClick={() => setFlotaModal(false)} style={{ width:"100%", marginTop:16, padding:"12px", background:"linear-gradient(135deg,#f97316,#ea580c)", border:"none", color:"#fff", borderRadius:12, cursor:"pointer", fontWeight:900, fontSize:14 }}>
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Planes y servicios adicionales */}
       <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, marginBottom:14, border:"1px solid #2a2a2a" }}>
@@ -2704,9 +2796,93 @@ function RepairsPage({ data, setPage }) {
     }
   }
 
-  function shareRepair(r) {
+  const [trailerMode, setTrailerMode] = useState(false); // si estamos cargando reparación del trailer
+  const [showTrailerForm, setShowTrailerForm] = useState(false);
+
+  // Obtener la entidad raw para chequear si tiene trailer
+  function getRawEntity() {
+    if (!selected) return null;
+    if (selected.type === "client") return data.clients.find(c => c.id === selected.id);
+    const comp = data.companies.find(c => c.id === selected.companyId);
+    return comp ? (comp.vehicles||[]).find(v => v.id === selected.id) : null;
+  }
+
+  // Reparaciones del trailer (guardadas en raw.trailerRepairs)
+  function getTrailerRepairs() {
+    const raw = getRawEntity();
+    return raw ? (raw.trailerRepairs || []) : [];
+  }
+
+  async function saveTrailerRepair(repData) {
+    if (!selected) return;
+    setSaving(true);
+    const existing = getTrailerRepairs();
+    const updated = [...existing, repData];
+    if (selected.type === "client") {
+      await fbUpdate("clients", selected.id, { trailerRepairs: updated });
+    } else {
+      const comp = selected.rawCompany || data.companies.find(c => c.id === selected.companyId);
+      if (comp) {
+        const updatedVehicles = (comp.vehicles||[]).map(v =>
+          v.id === selected.id ? { ...v, trailerRepairs: updated } : v
+        );
+        await fbUpdate("companies", selected.companyId, { vehicles: updatedVehicles });
+      }
+    }
+    setSaving(false);
+    setShowTrailerForm(false);
+  }
+
+  async function deleteTrailerRepair(idx) {
+    if (!selected) return;
+    if (!confirm("¿Eliminar esta reparación del trailer?")) return;
+    const updated = getTrailerRepairs().filter((_, i) => i !== idx);
+    if (selected.type === "client") {
+      await fbUpdate("clients", selected.id, { trailerRepairs: updated });
+    } else {
+      const comp = selected.rawCompany || data.companies.find(c => c.id === selected.companyId);
+      if (comp) {
+        const updatedVehicles = (comp.vehicles||[]).map(v =>
+          v.id === selected.id ? { ...v, trailerRepairs: updated } : v
+        );
+        await fbUpdate("companies", selected.companyId, { vehicles: updatedVehicles });
+      }
+    }
+  }
+
+  async function toggleTrailerRepairEstado(idx, newEstado) {
+    const existing = getTrailerRepairs();
+    const updated = existing.map((r, i) => i === idx ? { ...r, estado: newEstado } : r);
+    if (selected.type === "client") {
+      await fbUpdate("clients", selected.id, { trailerRepairs: updated });
+    } else {
+      const comp = selected.rawCompany || data.companies.find(c => c.id === selected.companyId);
+      if (comp) {
+        const updatedVehicles = (comp.vehicles||[]).map(v =>
+          v.id === selected.id ? { ...v, trailerRepairs: updated } : v
+        );
+        await fbUpdate("companies", selected.companyId, { vehicles: updatedVehicles });
+      }
+    }
+  }
+
+  function shareTrailerRepair(r) {
     const cat = REPAIR_CATS.find(c => c.id === r.categoria);
-    const isClient = selected.type === "client";
+    const msg = `🔧 *REPARACIÓN TRAILER — ASN Control Vehicular*\n` +
+      (selected.type === "client" ? `👤 Cliente: ${selected.name}\n` : `🏢 Empresa: ${selected.name}\n`) +
+      `🚐 Trailer del vehículo: ${selected.plate}\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📋 ${r.descripcion}\n` +
+      `📂 Categoría: ${cat?.label || r.categoria}\n` +
+      `📅 Fecha: ${new Date(r.createdAt).toLocaleDateString("es-AR")}\n` +
+      `💰 Costo: ${formatMoney(r.costo)}\n` +
+      (r.taller ? `🏪 Taller: ${r.taller}\n` : "") +
+      (r.notas ? `📝 Notas: ${r.notas}\n` : "") +
+      `━━━━━━━━━━━━━━━━━━━━\n_ASN · Control y Prevención Vehicular_`;
+    window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank");
+  }
+
+
     const msg = `🔧 *REPARACIÓN — ASN Control Vehicular*
 ` +
       (isClient ? `👤 Cliente: ${selected.name}
@@ -2809,7 +2985,64 @@ _ASN · Control y Prevención Vehicular_`;
             {selected.nroMovil && <div style={{ color:"#9ca3af", fontSize:12 }}>Móvil: {selected.nroMovil}</div>}
           </div>
 
-          {/* Estadísticas */}
+          {/* Tabs vehículo / trailer (si tiene trailer) */}
+          {(() => {
+            const raw = getRawEntity();
+            const tieneTrailer = raw?.tieneTrailer;
+            if (!tieneTrailer) return null;
+            return (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
+                <button onClick={() => setTrailerMode(false)}
+                  style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`2px solid ${!trailerMode ? "#a78bfa" : "#2a2a2a"}`, background: !trailerMode ? "#a78bfa22" : "#111", color: !trailerMode ? "#a78bfa" : "#6b7280", fontWeight:700, fontSize:13 }}>
+                  🚗 Vehículo
+                </button>
+                <button onClick={() => setTrailerMode(true)}
+                  style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`2px solid ${trailerMode ? "#f59e0b" : "#2a2a2a"}`, background: trailerMode ? "#f59e0b22" : "#111", color: trailerMode ? "#f59e0b" : "#6b7280", fontWeight:700, fontSize:13 }}>
+                  🚐 Trailer ({getTrailerRepairs().length})
+                </button>
+              </div>
+            );
+          })()}
+
+          {/* Vista reparaciones TRAILER */}
+          {trailerMode ? (
+            <>
+              <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, border:"1px solid #f59e0b44", marginBottom:14 }}>
+                <div style={{ color:"#f59e0b", fontSize:12, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>🚐 Trailer de {selected.plate}</div>
+                {(() => {
+                  const raw = getRawEntity();
+                  const tc = raw?.trailerCheck || {};
+                  const criticos = TRAILER_CHECK_ITEMS.filter(i => tc[i.id] === "critico").length;
+                  const ok = TRAILER_CHECK_ITEMS.filter(i => tc[i.id] === "ok").length;
+                  return (
+                    <div style={{ color:"#9ca3af", fontSize:12 }}>
+                      Estado actual: <span style={{ color: criticos > 0 ? "#ef4444" : "#10b981", fontWeight:700 }}>{criticos > 0 ? `${criticos} críticos` : `${ok} OK`}</span>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {!showTrailerForm ? (
+                <button onClick={() => setShowTrailerForm(true)}
+                  style={{ width:"100%", padding:"14px", background:"linear-gradient(135deg,#f59e0b,#d97706)", border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:15, marginBottom:16 }}>
+                  + Cargar reparación del trailer
+                </button>
+              ) : (
+                <RepairForm onSave={saveTrailerRepair} onCancel={() => setShowTrailerForm(false)}/>
+              )}
+
+              <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", marginBottom:12 }}>
+                Historial del trailer ({getTrailerRepairs().length})
+              </h3>
+              <RepairList
+                repairs={getTrailerRepairs()}
+                onDelete={deleteTrailerRepair}
+                onShare={shareTrailerRepair}
+                onToggleEstado={toggleTrailerRepairEstado}
+              />
+            </>
+          ) : (
+            <>
           {stats && (
             <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, border:"1px solid #2a2a2a", marginBottom:14 }}>
               <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", margin:"0 0 14px" }}>📊 Estadísticas del vehículo</h3>
@@ -2898,6 +3131,8 @@ _ASN · Control y Prevención Vehicular_`;
           ) : (
             <RepairList repairs={selected.repairs} onDelete={deleteRepair} onShare={shareRepair} onToggleEstado={toggleRepairEstado}/>
           )}
+          </>
+          )}
         </>
       )}
     </div>
@@ -2920,7 +3155,7 @@ function MaquinariaList({ data, setPage, setSelectedMaquina }) {
   return (
     <div style={{ padding:"16px 16px 100px" }}>
       <h2 style={{ color:"#a78bfa", margin:"0 0 16px", fontSize:22, fontWeight:900 }}>🏗️ Maquinaria Pesada</h2>
-      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, cantera, dominio, chasis o serie..."
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, empresa, dominio, chasis o serie..."
         style={{ width:"100%", padding:"12px 16px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, marginBottom:16, outline:"none" }}/>
       {filtered.length === 0 && (
         <div style={{ textAlign:"center", color:"#4b5563", padding:"40px 0" }}>
@@ -2938,7 +3173,7 @@ function MaquinariaList({ data, setPage, setSelectedMaquina }) {
             </div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ color:"#f1f5f9", fontWeight:700, fontSize:15, marginBottom:2 }}>{m.nombre || tipo?.label}</div>
-              {m.cantera && <div style={{ color:"#6b7280", fontSize:12 }}>⛏️ {m.cantera}</div>}
+              {m.cantera && <div style={{ color:"#6b7280", fontSize:12 }}>🏢 {m.cantera}</div>}
               {m.dominio
                 ? <div style={{ color:"#6b7280", fontSize:12 }}>🔖 {m.dominio}</div>
                 : m.nroChasis
@@ -2976,7 +3211,7 @@ function NewMaquina({ setPage, data }) {
 
   async function handleSave() {
     if (!form.cantera && empresaOpcion === "ninguna") {
-      alert("Ingresá la cantera/operador o seleccioná/creá una empresa.");
+      alert("Ingresá el nombre de la empresa/operador o seleccioná/creá una empresa.");
       return;
     }
     let empresaFinal = form.empresaId;
@@ -3059,7 +3294,7 @@ function NewMaquina({ setPage, data }) {
           )}
           {empresaOpcion === "ninguna" && (
             <input value={form.cantera} onChange={e => set("cantera", e.target.value)}
-              placeholder="Cantera / Operador (ej: Cantera San Martín)"
+              placeholder="Empresa / Operador (ej: Metalúrgica San Martín)"
               style={{ width:"100%", padding:"12px 14px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
           )}
         </div>
@@ -3236,7 +3471,7 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
     const cat = REPAIR_CATS.find(c => c.id === r.categoria);
     const msg = `🔧 *REPARACIÓN — ASN Control Vehicular*\n` +
       `🏗️ Máquina: ${freshMaquina.nombre || tipo?.label}\n` +
-      (freshMaquina.cantera ? `⛏️ Cantera: ${freshMaquina.cantera}\n` : "") +
+      (freshMaquina.cantera ? `🏢 Empresa: ${freshMaquina.cantera}\n` : "") +
       (freshMaquina.dominio ? `🔖 Dominio: ${freshMaquina.dominio}\n` : "") +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `📋 ${r.descripcion}\n` +
@@ -3260,7 +3495,7 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
     const fecha = new Date(ch.createdAt).toLocaleDateString("es-AR");
     let msg = `🏗️ *INFORME DE MAQUINARIA*\n*ASN · Control y Prevención Vehicular*\n━━━━━━━━━━━━━━━━━━━━\n\n`;
     msg += `🏗️ *Máquina:* ${freshMaquina.nombre || tipo?.label}\n`;
-    if (freshMaquina.cantera) msg += `⛏️ *Cantera:* ${freshMaquina.cantera}\n`;
+    if (freshMaquina.cantera) msg += `🏢 *Empresa:* ${freshMaquina.cantera}\n`;
     if (freshMaquina.dominio) msg += `🔖 *Dominio:* ${freshMaquina.dominio}\n`;
     msg += `📅 *Fecha:* ${fecha}\n`;
     if (ch.perito) msg += `👷 *Perito:* ${ch.perito}\n`;
@@ -3299,7 +3534,7 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
     doc.text("Fecha: " + fecha + (ch.perito ? "   Perito: " + ch.perito : ""), W - M, y + 4, { align:"right" });
     y += 16;
     let infoBody = [["Máquina", freshMaquina.nombre || tipo?.label || "—"]];
-    if (freshMaquina.cantera)  infoBody.push(["Cantera",  freshMaquina.cantera]);
+    if (freshMaquina.cantera)  infoBody.push(["Empresa",  freshMaquina.cantera]);
     if (freshMaquina.dominio)  infoBody.push(["Dominio",  freshMaquina.dominio]);
     if (freshMaquina.nroSerie) infoBody.push(["N° Serie", freshMaquina.nroSerie]);
     if (ch.horasMotor)         infoBody.push(["Horas motor", ch.horasMotor + " hs"]);
@@ -3404,7 +3639,7 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
         </div>
 
         {[
-          freshMaquina.cantera    && ["⛏️ Cantera",    freshMaquina.cantera],
+          freshMaquina.cantera    && ["🏢 Empresa",    freshMaquina.cantera],
           freshMaquina.dominio    && ["🔖 Dominio",    freshMaquina.dominio],
           freshMaquina.nroChasis  && ["🔩 Chasis",     freshMaquina.nroChasis],
           freshMaquina.nroSerie   && ["🔢 N° Serie",   freshMaquina.nroSerie],
@@ -3628,7 +3863,8 @@ function generarWppAlerta(entidad, tipo, alerts) {
     if (entidad.nroMovil) msg += `🔢 *Móvil:* ${entidad.nroMovil}\n`;
   } else {
     msg += `🏗️ *Máquina:* ${entidad.nombre}\n`;
-    msg += `⛏️ *Cantera:* ${entidad.cantera}\n`;
+    msg += `🏢 *Empresa:* ${entidad.cantera}
+`;
     if (entidad.dominio) msg += `🔖 *Dominio:* ${entidad.dominio}\n`;
     if (entidad.nroInterno) msg += `🔢 *Interno:* ${entidad.nroInterno}\n`;
   }
@@ -3983,7 +4219,7 @@ function GpsEntidadCard({ entidad, tipo, onConfigClick, onWhatsApp }) {
             {tipo === "vehicle" ? `${entidad.plate}${entidad.nroMovil ? ` · Móvil ${entidad.nroMovil}` : ""}` : (entidad.nombre || entidad.tipo)}
           </div>
           <div style={{ color:"#6b7280", fontSize:12 }}>
-            {tipo === "vehicle" ? `🏢 ${entidad.companyName} · ${entidad.vehicle}` : `⛏️ ${entidad.cantera}`}
+            {tipo === "vehicle" ? `🏢 ${entidad.companyName} · ${entidad.vehicle}` : `🏢 ${entidad.cantera}`}
           </div>
           {entidad.gpsConfig?.provider && (() => {
             const prov = GPS_PROVIDERS.find(p => p.id === entidad.gpsConfig.provider);
@@ -4347,7 +4583,7 @@ function GpsAlertas({ data, setPage }) {
 
       {/* Buscador */}
       <input value={search} onChange={e => setSearch(e.target.value)}
-        placeholder="Buscar por dominio, empresa, cantera..."
+        placeholder="Buscar por dominio, empresa..."
         style={{ width:"100%", padding:"11px 14px", borderRadius:12, background:"#1a1a1a",
           border:"1px solid #333", color:"#e5e7eb", fontSize:14, marginBottom:14, outline:"none" }}/>
 

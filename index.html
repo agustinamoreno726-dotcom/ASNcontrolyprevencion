@@ -1663,6 +1663,7 @@ function VehicleDetail({ vehicle, data, setPage }) {
   const vChecks = data.checks.filter(ch => ch.vehicleId === vehicle.id).sort((a,b) => b.createdAt - a.createdAt);
   const [tab, setTab] = useState("chequeos");
   const [showRepairForm, setShowRepairForm] = useState(false);
+  const [confirmDeleteVCheckId, setConfirmDeleteVCheckId] = useState(null);
 
   // Reparaciones guardadas en el objeto vehículo dentro de la empresa
   const company = data.companies.find(c => c.id === vehicle.companyId);
@@ -1728,8 +1729,8 @@ function VehicleDetail({ vehicle, data, setPage }) {
   }
 
   async function deleteVehicleCheck(checkId) {
-    if (!confirm("¿Eliminar este chequeo?")) return;
     await fbDelete("checks", checkId);
+    setConfirmDeleteVCheckId(null);
   }
 
   return (
@@ -2182,7 +2183,7 @@ function TrailerHistorial({ entity, tipo, onSave, onAddHistorial, onDeleteHistor
                 <button onClick={() => exportarPDFTrailer(entry)} style={{ flex:1, padding:"7px 8px", borderRadius:8, background:"linear-gradient(135deg,#ef4444,#b91c1c)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
                   📄 PDF
                 </button>
-                <button onClick={() => { if(confirm("¿Eliminar este chequeo?")) onDeleteHistorial(origIdx); }}
+                <button onClick={() => onDeleteHistorial(origIdx)}
                   style={{ padding:"7px 12px", borderRadius:8, background:"transparent", border:"1px solid #ef444433", color:"#ef4444", fontWeight:700, fontSize:11, cursor:"pointer" }}>
                   🗑️
                 </button>
@@ -3478,10 +3479,11 @@ function MaquinaDetail({ maquina, data, setPage, setSelectedMaquina }) {
     setSaving(false);
   }
 
+  const [confirmDeleteMaqCheckAt, setConfirmDeleteMaqCheckAt] = useState(null);
   async function deleteCheck(createdAt) {
-    if (!confirm("¿Eliminar este chequeo?")) return;
     const updated = (freshMaquina.checks||[]).filter(ch => ch.createdAt !== createdAt);
     await fbUpdate("maquinas", freshMaquina.id, { checks: updated });
+    setConfirmDeleteMaqCheckAt(null);
   }
 
   async function addRepair(repData) {

@@ -773,6 +773,29 @@ function generarInformeWpp(entity, ch, isCompanyVehicle = false) {
   if (criticos.length > 0)  { msg += `🔴 *CRÍTICO — Atención inmediata:*\n`; criticos.forEach(i => { msg += `  • ${i}\n`; }); msg += `\n`; }
   if (prevencion.length > 0){ msg += `🟡 *PREVENCIÓN — Seguimiento:*\n`; prevencion.forEach(i => { msg += `  • ${i}\n`; }); msg += `\n`; }
   if (solicitar.length > 0) { msg += `🔵 *SOLICITAR — Pendiente:*\n`; solicitar.forEach(i => { msg += `  • ${i}\n`; }); msg += `\n`; }
+
+  // ── TRAILER ──
+  if (ch.trailerIncluido && ch.trailerItemStates && Object.keys(ch.trailerItemStates).length > 0) {
+    const ts = ch.trailerItemStates;
+    const trCriticos = []; const trPrev = []; const trSolic = []; const trOk = [];
+    TRAILER_CHECK_ITEMS.forEach(item => {
+      const e = ts[item.id];
+      if (e === "critico")    trCriticos.push(item.label);
+      else if (e === "prevencion") trPrev.push(item.label);
+      else if (e === "solicitar")  trSolic.push(item.label);
+      else if (e === "ok")         trOk.push(item.label);
+    });
+    const trOkCount = trOk.length;
+    const trTotal = TRAILER_CHECK_ITEMS.length;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `🚐 *CONTROL DE TRAILER*\n`;
+    msg += `✅ Ítems OK: *${trOkCount}/${trTotal}*\n`;
+    if (trCriticos.length > 0) { msg += `🔴 *Crítico:*\n`; trCriticos.forEach(i => { msg += `  • ${i}\n`; }); }
+    if (trPrev.length > 0)     { msg += `🟡 *Prevención:*\n`; trPrev.forEach(i => { msg += `  • ${i}\n`; }); }
+    if (trSolic.length > 0)    { msg += `🔵 *Solicitar:*\n`; trSolic.forEach(i => { msg += `  • ${i}\n`; }); }
+    msg += `\n`;
+  }
+
   if (ch.recomendaciones) { msg += `━━━━━━━━━━━━━━━━━━━━\n💡 *Recomendaciones:*\n${ch.recomendaciones}\n\n`; }
   if (ch.detalle)         { msg += `📝 *Detalle:*\n${ch.detalle}\n\n`; }
   msg += `━━━━━━━━━━━━━━━━━━━━\n_ASN · Control y Prevención Vehicular_`;
@@ -886,6 +909,36 @@ function exportarPDF(entity, ch, isCompanyVehicle = false) {
     y = doc.lastAutoTable.finalY + 3;
   });
 
+  // ── TRAILER ──
+  if (ch.trailerIncluido && ch.trailerItemStates && Object.keys(ch.trailerItemStates).length > 0) {
+    const ts = ch.trailerItemStates;
+    const trailerRows = TRAILER_CHECK_ITEMS.map(item => {
+      const e = ts[item.id];
+      const est = ESTADOS.find(x => x.id === e);
+      return [item.label, est ? est.label : "—", e || ""];
+    });
+    doc.autoTable({
+      startY: y,
+      head: [["🚐  Control de Trailer", "Estado"]],
+      body: trailerRows.map(r => [r[0], r[1]]),
+      theme: "striped",
+      styles: { fontSize:8, cellPadding:2, textColor:[55,65,81], fillColor:[255,255,255] },
+      headStyles: { fillColor:[255,237,213], textColor:[154,52,18], fontStyle:"bold", fontSize:8 },
+      alternateRowStyles: { fillColor:[255,247,237] },
+      columnStyles: { 0:{ cellWidth:"auto" }, 1:{ cellWidth:26, halign:"right" } },
+      margin: { left:M, right:M },
+      didParseCell(data) {
+        if (data.column.index === 1 && data.section === "body") {
+          const stateKey = trailerRows[data.row.index]?.[2];
+          const col = estadoColors[stateKey] || [107,114,128];
+          data.cell.styles.textColor = col;
+          data.cell.styles.fontStyle = "bold";
+        }
+      },
+    });
+    y = doc.lastAutoTable.finalY + 3;
+  }
+
   // ── NOTAS ──
   if (ch.recomendaciones) {
     doc.setFillColor(255,251,235); doc.setDrawColor(252,211,77); doc.setLineWidth(0.3);
@@ -924,6 +977,105 @@ function exportarPDF(entity, ch, isCompanyVehicle = false) {
   doc.save(nombre);
 }
 
+/* ─────────────── MODAL DETALLE DE CHEQUEO ─────────────── */
+function CheckDetailModal({ ch, entity, isCompanyVehicle, onClose }) {
+  const estados = ch.itemStates || {};
+  const trailerStates = ch.trailerItemStates || {};
+  const tieneTrailerEnCheck = ch.trailerIncluido && Object.keys(trailerStates).length > 0;
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", backdropFilter:"blur(6px)", zIndex:400, display:"flex", flexDirection:"column", overflowY:"auto" }}>
+      <div style={{ maxWidth:560, width:"100%", margin:"0 auto", padding:"16px 14px 120px" }}>
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+          <button onClick={onClose} style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.2)", color:"#f97316", borderRadius:10, padding:"8px 14px", fontWeight:700, fontSize:13, cursor:"pointer" }}>← Cerrar</button>
+          <div>
+            <div style={{ color:"#f1f5f9", fontWeight:900, fontSize:16 }}>Detalle del Chequeo</div>
+            <div style={{ color:"#6b7280", fontSize:12 }}>{new Date(ch.createdAt).toLocaleDateString("es-AR")}{ch.perito ? ` · ${ch.perito}` : ""}{ch.kms ? ` · ${ch.kms} km` : ""}</div>
+          </div>
+        </div>
+
+        {/* Resumen numérico */}
+        {(() => {
+          const allItems = CHECK_SECTIONS.flatMap(s => s.items);
+          const ok = allItems.filter(i => estados[i.id] === "ok").length;
+          const critico = allItems.filter(i => estados[i.id] === "critico").length;
+          const prev = allItems.filter(i => estados[i.id] === "prevencion").length;
+          const solic = allItems.filter(i => estados[i.id] === "solicitar").length;
+          const pct = Math.round((ok / allItems.length) * 100);
+          return (
+            <div style={{ background:"#1a1a1a", borderRadius:16, padding:14, marginBottom:14, border:"1px solid #2a2a2a" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6, marginBottom:10 }}>
+                {[{v:ok,l:"OK",c:"#10b981"},{v:critico,l:"Crítico",c:"#ef4444"},{v:prev,l:"Prev.",c:"#f59e0b"},{v:solic,l:"Solicit.",c:"#60a5fa"}].map(({v,l,c})=>(
+                  <div key={l} style={{ background:"#0f0f0f", borderRadius:10, padding:"8px 4px", textAlign:"center", border:`1px solid ${c}22` }}>
+                    <div style={{ color:c, fontWeight:900, fontSize:20 }}>{v}</div>
+                    <div style={{ color:"#6b7280", fontSize:10 }}>{l}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ width:"100%", height:5, background:"#111", borderRadius:3, overflow:"hidden" }}>
+                <div style={{ width:`${pct}%`, height:"100%", borderRadius:3, background: critico > 0 ? "#ef4444" : pct >= 80 ? "#10b981" : "#f59e0b" }}/>
+              </div>
+              <div style={{ color:"#6b7280", fontSize:11, textAlign:"right", marginTop:4 }}>{pct}% OK ({ok}/{allItems.length})</div>
+            </div>
+          );
+        })()}
+
+        {/* Secciones */}
+        {CHECK_SECTIONS.map(sec => {
+          const items = sec.items.map(item => ({ ...item, estadoId: estados[item.id] }));
+          const sinEstado = items.filter(i => !i.estadoId).length;
+          return (
+            <div key={sec.id} style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:10, border:"1px solid #2a2a2a" }}>
+              <div style={{ color:"#e5e7eb", fontWeight:700, fontSize:13, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:10 }}>{sec.icon} {sec.title}</div>
+              {items.map(item => {
+                const est = ESTADOS.find(e => e.id === item.estadoId);
+                return (
+                  <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", borderBottom:"1px solid #232323" }}>
+                    <span style={{ color: est ? "#e5e7eb" : "#4b5563", fontSize:13 }}>{item.label}</span>
+                    {est
+                      ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}44`, whiteSpace:"nowrap" }}>{est.label}</span>
+                      : <span style={{ color:"#3a3a3a", fontSize:11 }}>—</span>
+                    }
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+
+        {/* Trailer */}
+        {tieneTrailerEnCheck && (
+          <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:10, border:"1px solid #f9731633" }}>
+            <div style={{ color:"#f97316", fontWeight:700, fontSize:13, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:10 }}>🚐 Trailer</div>
+            {TRAILER_CHECK_ITEMS.map(item => {
+              const estadoId = trailerStates[item.id];
+              const est = ESTADOS.find(e => e.id === estadoId);
+              return (
+                <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", borderBottom:"1px solid #232323" }}>
+                  <span style={{ color: est ? "#e5e7eb" : "#4b5563", fontSize:13 }}>{item.label}</span>
+                  {est
+                    ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}44`, whiteSpace:"nowrap" }}>{est.label}</span>
+                    : <span style={{ color:"#3a3a3a", fontSize:11 }}>—</span>
+                  }
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Notas */}
+        {(ch.recomendaciones || ch.detalle) && (
+          <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:10, border:"1px solid #2a2a2a" }}>
+            {ch.recomendaciones && <div style={{ marginBottom: ch.detalle ? 10 : 0 }}><div style={{ color:"#f59e0b", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>💡 Recomendaciones</div><div style={{ color:"#9ca3af", fontSize:13 }}>{ch.recomendaciones}</div></div>}
+            {ch.detalle && <div><div style={{ color:"#60a5fa", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>📝 Detalle</div><div style={{ color:"#9ca3af", fontSize:13 }}>{ch.detalle}</div></div>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────── CLIENT DETAIL ─────────────── */
 function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
   const svc = SERVICES.find(s => s.id === client.service);
@@ -931,6 +1083,7 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
   const [tab, setTab] = useState("chequeos"); // "chequeos" | "reparaciones"
   const [showRepairForm, setShowRepairForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [viewingCheck, setViewingCheck] = useState(null); // check a ver en detalle
 
   // Reparaciones guardadas en el doc del cliente
   const repairs = client.repairs || [];
@@ -1097,6 +1250,9 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
                   {ch.recomendaciones && <div style={{ color:"#6b7280", fontSize:12, marginBottom:4 }}>💡 {ch.recomendaciones}</div>}
                   {ch.detalle && <div style={{ color:"#6b7280", fontSize:12, marginBottom:8 }}>📝 {ch.detalle}</div>}
                   <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                    <button onClick={() => setViewingCheck(ch)} style={{ padding:"10px 12px", borderRadius:10, background:"#1a1a1a", border:"1px solid #333", color:"#9ca3af", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                      🔍 Ver
+                    </button>
                     <button onClick={() => enviarWpp(ch)} style={{ flex:1, padding:"10px 8px", borderRadius:10, background:"linear-gradient(135deg,#22c55e,#15803d)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:5, letterSpacing:"0.04em" }}>
                       💬 WhatsApp
                     </button>
@@ -1161,6 +1317,16 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
       <button onClick={deleteClient} style={{ width:"100%", marginTop:16, padding:"13px", background:"rgba(239,68,68,0.04)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", borderRadius:12, cursor:"pointer", fontWeight:700, fontSize:13, letterSpacing:"0.06em" }}>
         🗑️ Eliminar cliente
       </button>
+
+      {/* Modal detalle de chequeo */}
+      {viewingCheck && (
+        <CheckDetailModal
+          ch={viewingCheck}
+          entity={client}
+          isCompanyVehicle={false}
+          onClose={() => setViewingCheck(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1664,6 +1830,7 @@ function VehicleDetail({ vehicle, data, setPage }) {
   const [tab, setTab] = useState("chequeos");
   const [showRepairForm, setShowRepairForm] = useState(false);
   const [confirmDeleteVCheckId, setConfirmDeleteVCheckId] = useState(null);
+  const [viewingCheck, setViewingCheck] = useState(null);
 
   // Reparaciones guardadas en el objeto vehículo dentro de la empresa
   const company = data.companies.find(c => c.id === vehicle.companyId);
@@ -1809,6 +1976,9 @@ function VehicleDetail({ vehicle, data, setPage }) {
                   {ch.recomendaciones && <div style={{ color:"#6b7280", fontSize:12, marginBottom:4 }}>💡 {ch.recomendaciones}</div>}
                   {ch.detalle && <div style={{ color:"#6b7280", fontSize:12, marginBottom:8 }}>📝 {ch.detalle}</div>}
                   <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                    <button onClick={() => setViewingCheck(ch)} style={{ padding:"10px 12px", borderRadius:10, background:"#1a1a1a", border:"1px solid #333", color:"#9ca3af", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                      🔍 Ver
+                    </button>
                     <button onClick={() => enviarWpp(ch)} style={{ flex:1, padding:"10px 8px", borderRadius:12, background:"linear-gradient(135deg,#22c55e,#16a34a)", border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>
                       💬 WhatsApp
                     </button>
@@ -1874,6 +2044,15 @@ function VehicleDetail({ vehicle, data, setPage }) {
             });
             await fbUpdate("companies", company.id, { vehicles: updatedVehicles });
           }}
+        />
+      )}
+
+      {viewingCheck && (
+        <CheckDetailModal
+          ch={viewingCheck}
+          entity={vehicle}
+          isCompanyVehicle={true}
+          onClose={() => setViewingCheck(null)}
         />
       )}
     </div>
@@ -2399,6 +2578,34 @@ function RepairList({ repairs, onDelete, onShare, onToggleEstado }) {
   });
 }
 
+/* ─────────────── TRAILER CHECK ITEM ROW ─────────────── */
+function TrailerCheckItemRow({ item, estado, onSetEstado }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const est = ESTADOS.find(e => e.id === estado);
+  return (
+    <div>
+      <div onClick={() => setIsOpen(o => !o)}
+        style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 4px", cursor:"pointer", borderBottom:"1px solid #232323" }}>
+        <span style={{ flex:1, color: estado ? "#e5e7eb" : "#9ca3af", fontSize:13 }}>{item.label}</span>
+        {est
+          ? <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}55`, whiteSpace:"nowrap" }}>{est.label}</span>
+          : <span style={{ color:"#3a3a3a", fontSize:11 }}>— tocar —</span>
+        }
+      </div>
+      {isOpen && (
+        <div style={{ display:"flex", flexWrap:"wrap", gap:6, padding:"8px 0 12px", borderBottom:"1px solid #232323" }}>
+          {ESTADOS.map(e => (
+            <button key={e.id} onClick={() => { onSetEstado(estado === e.id ? null : e.id); setIsOpen(false); }}
+              style={{ padding:"6px 14px", borderRadius:20, border:`2px solid ${e.color}`, background: estado===e.id ? e.bg : "transparent", color:e.color, fontWeight:700, fontSize:12, cursor:"pointer" }}>{e.label}</button>
+          ))}
+          {estado && <button onClick={() => { onSetEstado(null); setIsOpen(false); }}
+            style={{ padding:"6px 14px", borderRadius:20, border:"2px solid #374151", background:"transparent", color:"#6b7280", fontWeight:700, fontSize:12, cursor:"pointer" }}>Limpiar</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─────────────── CHECKS ─────────────── */
 const ST  = { color:"#e5e7eb", margin:"0 0 12px", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" };
 const INP = { width:"100%", padding:"10px 14px", borderRadius:10, background:"#111", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" };
@@ -2414,6 +2621,7 @@ function Checks({ data, setPage, preselectedClientId }) {
   const [kms, setKms] = useState("");
   const [nroMovil, setNroMovil] = useState("");
   const [itemStates, setItemStates] = useState(buildInitialItems);
+  const [trailerItemStates, setTrailerItemStates] = useState({});
   const [detalle, setDetalle] = useState("");
   const [recomendaciones, setRecomendaciones] = useState("");
   const [saved, setSaved] = useState(false);
@@ -2447,15 +2655,28 @@ function Checks({ data, setPage, preselectedClientId }) {
   async function handleSave() {
     if (mode === "client" && !clientId) { alert("Seleccioná un cliente."); return; }
     if (mode === "company" && (!companyId || !vehicleId)) { alert("Seleccioná empresa y vehículo."); return; }
+
+    // Determinar si hay trailer
+    let selectedEntityForSave = null;
+    if (mode === "client" && clientId) selectedEntityForSave = data.clients.find(c => c.id === clientId);
+    else if (mode === "company" && vehicleId) {
+      const comp = data.companies.find(c => c.id === companyId);
+      selectedEntityForSave = comp ? (comp.vehicles||[]).find(v => v.id === vehicleId) : null;
+    }
+    const tieneTrailer = selectedEntityForSave?.tieneTrailer || false;
+
     const check = {
       clientId: mode === "client" ? clientId : null,
       vehicleId: mode === "company" ? vehicleId : null,
       companyId: mode === "company" ? companyId : null,
-      perito, kms, nroMovil, itemStates, detalle, recomendaciones, createdAt: Date.now()
+      perito, kms, nroMovil, itemStates, detalle, recomendaciones,
+      trailerIncluido: tieneTrailer,
+      trailerItemStates: tieneTrailer ? trailerItemStates : {},
+      createdAt: Date.now()
     };
     await fbAdd("checks", check);
     setSaved(true);
-    setItemStates(buildInitialItems()); setClientId(""); setCompanyId(""); setVehicleId(""); setPerito(""); setKms(""); setNroMovil(""); setDetalle(""); setRecomendaciones("");
+    setItemStates(buildInitialItems()); setTrailerItemStates({}); setClientId(""); setCompanyId(""); setVehicleId(""); setPerito(""); setKms(""); setNroMovil(""); setDetalle(""); setRecomendaciones("");
     setTimeout(() => setSaved(false), 2000);
   }
 
@@ -2655,29 +2876,24 @@ function Checks({ data, setPage, preselectedClientId }) {
         }
         if (!selectedEntity) return null;
         const tieneTrailer = selectedEntity.tieneTrailer;
-        const trailerCheck = selectedEntity.trailerCheck || {};
         return (
           <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, marginBottom:12, border:`1px solid ${tieneTrailer ? "#f9731644" : "#2a2a2a"}` }}>
             <h3 style={{ color: tieneTrailer ? "#f97316" : "#4b5563", margin:"0 0 10px", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>
-              🚐 Estado del Trailer
+              🚐 Control del Trailer
             </h3>
             {!tieneTrailer ? (
               <div style={{ color:"#6b7280", fontSize:13, fontStyle:"italic" }}>No posee trailer</div>
             ) : (
-              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                {TRAILER_CHECK_ITEMS.map(item => {
-                  const estadoId = trailerCheck[item.id];
-                  const est = ESTADOS.find(e => e.id === estadoId);
-                  return (
-                    <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                      <span style={{ color:"#9ca3af", fontSize:12 }}>{item.label}</span>
-                      {est
-                        ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}44` }}>{est.label}</span>
-                        : <span style={{ color:"#3a3a3a", fontSize:11 }}>—</span>
-                      }
-                    </div>
-                  );
-                })}
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <div style={{ color:"#6b7280", fontSize:11, marginBottom:4 }}>Este vehículo tiene trailer — completá el estado de cada ítem:</div>
+                {TRAILER_CHECK_ITEMS.map(item => (
+                  <TrailerCheckItemRow
+                    key={item.id}
+                    item={item}
+                    estado={trailerItemStates[item.id] || null}
+                    onSetEstado={(val) => setTrailerItemStates(p => ({ ...p, [item.id]: val }))}
+                  />
+                ))}
               </div>
             )}
           </div>

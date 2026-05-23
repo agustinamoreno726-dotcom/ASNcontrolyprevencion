@@ -1413,26 +1413,8 @@ function NewClient({ data, setPage }) {
             <span style={{ fontSize:16 }}>{form.tieneTrailer ? "✓ Sí" : "+ No"}</span>
           </button>
           {form.tieneTrailer && (
-            <div style={{ marginTop:10, background:"#111", borderRadius:12, padding:14, border:"1px solid #f9731633" }}>
-              <div style={{ color:"#f97316", fontSize:12, fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>Control del trailer</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                {TRAILER_CHECK_ITEMS.map(item => {
-                  const estado = (form.trailerCheck||{})[item.id] || null;
-                  return (
-                    <div key={item.id} style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                      <span style={{ color:"#9ca3af", fontSize:13, minWidth:130 }}>{item.label}</span>
-                      <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                        {ESTADOS.map(est => (
-                          <button key={est.id} onClick={() => set("trailerCheck", {...(form.trailerCheck||{}), [item.id]: estado === est.id ? null : est.id })}
-                            style={{ padding:"4px 8px", borderRadius:8, fontSize:11, fontWeight:700, cursor:"pointer", border:`1px solid ${estado===est.id ? est.color : "#333"}`, background: estado===est.id ? est.bg : "transparent", color: estado===est.id ? est.color : "#4b5563" }}>
-                            {est.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+            <div style={{ marginTop:8, background:"#111", borderRadius:10, padding:"10px 14px", border:"1px solid #f9731633", color:"#9ca3af", fontSize:12 }}>
+              🚐 El chequeo del trailer se completará al realizar el control vehicular.
             </div>
           )}
         </div>
@@ -1647,26 +1629,8 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
               <span>🚐</span><span style={{ flex:1 }}>¿Tiene trailer?</span><span>{vForm.tieneTrailer ? "✓ Sí" : "+ No"}</span>
             </button>
             {vForm.tieneTrailer && (
-              <div style={{ background:"#080808", borderRadius:10, padding:12, border:"1px solid #f9731633" }}>
-                <div style={{ color:"#f97316", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>Control del trailer</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {TRAILER_CHECK_ITEMS.map(item => {
-                    const estado = (vForm.trailerCheck||{})[item.id] || null;
-                    return (
-                      <div key={item.id} style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                        <span style={{ color:"#9ca3af", fontSize:12, minWidth:130 }}>{item.label}</span>
-                        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                          {ESTADOS.map(est => (
-                            <button key={est.id} onClick={() => setVForm(f => ({...f, trailerCheck:{...(f.trailerCheck||{}), [item.id]: estado===est.id ? null : est.id}}))}
-                              style={{ padding:"3px 7px", borderRadius:7, fontSize:10, fontWeight:700, cursor:"pointer", border:`1px solid ${estado===est.id ? est.color : "#333"}`, background: estado===est.id ? est.bg : "transparent", color: estado===est.id ? est.color : "#4b5563" }}>
-                              {est.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div style={{ background:"#080808", borderRadius:10, padding:"10px 14px", border:"1px solid #f9731633", color:"#9ca3af", fontSize:12 }}>
+                🚐 El chequeo del trailer se completará al realizar el control vehicular.
               </div>
             )}
 
@@ -1737,28 +1701,9 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
                       style={{ width:"100%", padding:"10px 14px", borderRadius:10, cursor:"pointer", border:`2px solid ${eForm.tieneTrailer ? "#f97316" : "#2a2a2a"}`, background: eForm.tieneTrailer ? "#f9731622" : "#1a1a1a", color: eForm.tieneTrailer ? "#f97316" : "#6b7280", fontWeight:700, fontSize:13, display:"flex", alignItems:"center", gap:8 }}>
                       <span>🚐</span><span style={{ flex:1 }}>¿Tiene trailer?</span><span>{eForm.tieneTrailer ? "✓ Sí" : "+ No"}</span>
                     </button>
-
                     {eForm.tieneTrailer && (
-                      <div style={{ background:"#080808", borderRadius:10, padding:12, border:"1px solid #f9731633" }}>
-                        <div style={{ color:"#f97316", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>Control del trailer</div>
-                        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                          {TRAILER_CHECK_ITEMS.map(item => {
-                            const estado = (eForm.trailerCheck||{})[item.id] || null;
-                            return (
-                              <div key={item.id} style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                                <span style={{ color:"#9ca3af", fontSize:12, minWidth:130 }}>{item.label}</span>
-                                <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                                  {ESTADOS.map(est => (
-                                    <button key={est.id} onClick={() => setEForm(f => ({...f, trailerCheck:{...(f.trailerCheck||{}), [item.id]: estado===est.id ? null : est.id}}))}
-                                      style={{ padding:"3px 7px", borderRadius:7, fontSize:10, fontWeight:700, cursor:"pointer", border:`1px solid ${estado===est.id ? est.color : "#333"}`, background: estado===est.id ? est.bg : "transparent", color: estado===est.id ? est.color : "#4b5563" }}>
-                                      {est.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                      <div style={{ background:"#080808", borderRadius:10, padding:"10px 14px", border:"1px solid #f9731633", color:"#9ca3af", fontSize:12 }}>
+                        🚐 El chequeo del trailer se completará al realizar el control vehicular.
                       </div>
                     )}
 

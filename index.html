@@ -789,6 +789,7 @@ function generarInformeWpp(entity, ch, isCompanyVehicle = false) {
     const trTotal = TRAILER_CHECK_ITEMS.length;
     msg += `━━━━━━━━━━━━━━━━━━━━\n`;
     msg += `🚐 *CONTROL DE TRAILER*\n`;
+    if (entity.trailerNro) msg += `🔖 *Nro. Trailer:* ${entity.trailerNro}\n`;
     msg += `✅ Ítems OK: *${trOkCount}/${trTotal}*\n`;
     if (trCriticos.length > 0) { msg += `🔴 *Crítico:*\n`; trCriticos.forEach(i => { msg += `  • ${i}\n`; }); }
     if (trPrev.length > 0)     { msg += `🟡 *Prevención:*\n`; trPrev.forEach(i => { msg += `  • ${i}\n`; }); }
@@ -917,9 +918,10 @@ function exportarPDF(entity, ch, isCompanyVehicle = false) {
       const est = ESTADOS.find(x => x.id === e);
       return [item.label, est ? est.label : "—", e || ""];
     });
+    const trailerHeader = entity.trailerNro ? `🚐  Control de Trailer — ${entity.trailerNro}` : "🚐  Control de Trailer";
     doc.autoTable({
       startY: y,
-      head: [["🚐  Control de Trailer", "Estado"]],
+      head: [[trailerHeader, "Estado"]],
       body: trailerRows.map(r => [r[0], r[1]]),
       theme: "striped",
       styles: { fontSize:8, cellPadding:2, textColor:[55,65,81], fillColor:[255,255,255] },
@@ -1186,21 +1188,9 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
         {/* Trailer */}
         {client.tieneTrailer && (
           <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #2a2a2a" }}>
-            <div style={{ color:"#f97316", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>🚐 Control de Trailer</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              {TRAILER_CHECK_ITEMS.map(item => {
-                const estadoId = (client.trailerCheck||{})[item.id];
-                const est = ESTADOS.find(e => e.id === estadoId);
-                return (
-                  <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <span style={{ color:"#9ca3af", fontSize:12 }}>{item.label}</span>
-                    {est
-                      ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}33`, letterSpacing:"0.06em" }}>{est.label}</span>
-                      : <span style={{ color:"#4b5563", fontSize:11 }}>—</span>
-                    }
-                  </div>
-                );
-              })}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ color:"#f97316", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>🚐 Trailer asignado</div>
+              {client.trailerNro && <span style={{ color:"#f97316", fontSize:12, fontWeight:700, background:"#f9731618", border:"1px solid #f9731633", borderRadius:8, padding:"2px 10px" }}>{client.trailerNro}</span>}
             </div>
           </div>
         )}
@@ -1413,8 +1403,13 @@ function NewClient({ data, setPage }) {
             <span style={{ fontSize:16 }}>{form.tieneTrailer ? "✓ Sí" : "+ No"}</span>
           </button>
           {form.tieneTrailer && (
-            <div style={{ marginTop:8, background:"#111", borderRadius:10, padding:"10px 14px", border:"1px solid #f9731633", color:"#9ca3af", fontSize:12 }}>
-              🚐 El chequeo del trailer se completará al realizar el control vehicular.
+            <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:8 }}>
+              <input value={form.trailerNro||""} onChange={e => set("trailerNro", e.target.value)}
+                placeholder="Nro. / Patente del trailer (ej: Trailer 5, ABC123)"
+                style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"#111", border:"1px solid #f9731644", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+              <div style={{ background:"#111", borderRadius:10, padding:"10px 14px", border:"1px solid #f9731622", color:"#9ca3af", fontSize:12 }}>
+                🚐 El chequeo del trailer se completará al realizar el control vehicular.
+              </div>
             </div>
           )}
         </div>
@@ -1527,7 +1522,7 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
 
   function startEdit(v) {
     setEditingVehicle(v.id);
-    setEForm({ plate: v.plate, vehicle: v.vehicle, nroMovil: v.nroMovil||"", notes: v.notes||"", tieneTrailer: v.tieneTrailer||false, trailerCheck: v.trailerCheck||{} });
+    setEForm({ plate: v.plate, vehicle: v.vehicle, nroMovil: v.nroMovil||"", notes: v.notes||"", tieneTrailer: v.tieneTrailer||false, trailerCheck: v.trailerCheck||{}, trailerNro: v.trailerNro||"" });
   }
 
   async function saveEdit(vehicleId) {
@@ -1629,8 +1624,13 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
               <span>🚐</span><span style={{ flex:1 }}>¿Tiene trailer?</span><span>{vForm.tieneTrailer ? "✓ Sí" : "+ No"}</span>
             </button>
             {vForm.tieneTrailer && (
-              <div style={{ background:"#080808", borderRadius:10, padding:"10px 14px", border:"1px solid #f9731633", color:"#9ca3af", fontSize:12 }}>
-                🚐 El chequeo del trailer se completará al realizar el control vehicular.
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <input value={vForm.trailerNro||""} onChange={e => setVForm(f => ({...f, trailerNro: e.target.value}))}
+                  placeholder="Nro. / Patente del trailer (ej: Trailer 5, ABC123)"
+                  style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"#111", border:"1px solid #f9731644", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+                <div style={{ background:"#080808", borderRadius:10, padding:"10px 14px", border:"1px solid #f9731622", color:"#9ca3af", fontSize:12 }}>
+                  🚐 El chequeo del trailer se completará al realizar el control vehicular.
+                </div>
               </div>
             )}
 
@@ -1702,8 +1702,13 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
                       <span>🚐</span><span style={{ flex:1 }}>¿Tiene trailer?</span><span>{eForm.tieneTrailer ? "✓ Sí" : "+ No"}</span>
                     </button>
                     {eForm.tieneTrailer && (
-                      <div style={{ background:"#080808", borderRadius:10, padding:"10px 14px", border:"1px solid #f9731633", color:"#9ca3af", fontSize:12 }}>
-                        🚐 El chequeo del trailer se completará al realizar el control vehicular.
+                      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                        <input value={eForm.trailerNro||""} onChange={e => setEForm(f => ({...f, trailerNro: e.target.value}))}
+                          placeholder="Nro. / Patente del trailer (ej: Trailer 5, ABC123)"
+                          style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"#1a1a1a", border:"1px solid #f9731644", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+                        <div style={{ background:"#080808", borderRadius:10, padding:"10px 14px", border:"1px solid #f9731622", color:"#9ca3af", fontSize:12 }}>
+                          🚐 El chequeo del trailer se completará al realizar el control vehicular.
+                        </div>
                       </div>
                     )}
 
@@ -1863,21 +1868,9 @@ function VehicleDetail({ vehicle, data, setPage }) {
         {/* Trailer */}
         {vehicle.tieneTrailer && (
           <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #2a2a2a" }}>
-            <div style={{ color:"#f97316", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>🚐 Control de Trailer</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              {TRAILER_CHECK_ITEMS.map(item => {
-                const estadoId = (vehicle.trailerCheck||{})[item.id];
-                const est = ESTADOS.find(e => e.id === estadoId);
-                return (
-                  <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <span style={{ color:"#9ca3af", fontSize:12 }}>{item.label}</span>
-                    {est
-                      ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}33`, letterSpacing:"0.06em" }}>{est.label}</span>
-                      : <span style={{ color:"#4b5563", fontSize:11 }}>—</span>
-                    }
-                  </div>
-                );
-              })}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ color:"#f97316", fontSize:11, fontWeight:700, textTransform:"uppercase" }}>🚐 Trailer asignado</div>
+              {vehicle.trailerNro && <span style={{ color:"#f97316", fontSize:12, fontWeight:700, background:"#f9731618", border:"1px solid #f9731633", borderRadius:8, padding:"2px 10px" }}>{vehicle.trailerNro}</span>}
             </div>
           </div>
         )}

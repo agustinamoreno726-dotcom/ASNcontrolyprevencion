@@ -339,11 +339,11 @@ function ASNLogo({ size = 40 }) {
 /* ─────────────── NAV ─────────────── */
 function Nav({ page, setPage }) {
   const items = [
-    { id: "dashboard",  icon: "📊", label: "Panel" },
-    { id: "clients",    icon: "👤", label: "Clientes" },
-    { id: "checks",     icon: "✅", label: "Chequeos" },
-    { id: "companies",  icon: "🏢", label: "Empresas" },
-    { id: "gps",        icon: "📡", label: "GPS" },
+    { id: "dashboard",     icon: "📊", label: "Panel" },
+    { id: "clients",       icon: "👤", label: "Clientes" },
+    { id: "checks",        icon: "✅", label: "Chequeos" },
+    { id: "companies",     icon: "🏢", label: "Empresas" },
+    { id: "buscar-patente",icon: "🔍", label: "Buscar" },
   ];
   return (
     <nav style={{ position:"fixed", bottom:0, left:0, right:0, zIndex:100, background:"rgba(9,9,9,0.97)", borderTop:"1px solid rgba(249,115,22,0.12)", backdropFilter:"blur(12px)", display:"flex", justifyContent:"space-around", padding:"8px 0 env(safe-area-inset-bottom, 12px)", boxShadow:"0 -1px 0 rgba(249,115,22,0.08), 0 -8px 32px rgba(0,0,0,0.8)" }}>
@@ -1165,7 +1165,7 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
             <span style={{ color:svc?.color, fontSize:12, fontWeight:700 }}>Plan {svc?.name}</span>
           </div>
         </div>
-        {[["Teléfono", client.phone], ["Vehículo", client.vehicle], ["Dominio", client.plate], client.notes && ["Notas", client.notes]].filter(Boolean).map(([l,v]) => (
+        {[["Teléfono", client.phone], ["Vehículo", client.vehicle], ["Dominio", client.plate], client.notes && ["Notas", client.notes], client.vendedorNombre && ["🧑‍💼 Vendedor", client.vendedorNombre + (client.vendedorTelefono ? ` · ${client.vendedorTelefono}` : "")]].filter(Boolean).map(([l,v]) => (
           <div key={l} style={{ display:"flex", justifyContent:"space-between", gap:8, marginBottom:8 }}>
             <span style={{ color:"#6b7280", fontSize:13 }}>{l}</span>
             <span style={{ color:"#e5e7eb", fontSize:13, fontWeight:600, textAlign:"right" }}>{v}</span>
@@ -1333,7 +1333,7 @@ function Field({ label, value, onChange, placeholder, type="text" }) {
 }
 
 function NewClient({ data, setPage }) {
-  const [form, setForm] = useState({ name:"", phone:"", vehicle:"", plate:"", service:"base", extras:[], notes:"", tieneTrailer:false, trailerCheck:{} });
+  const [form, setForm] = useState({ name:"", phone:"", vehicle:"", plate:"", service:"base", extras:[], notes:"", tieneTrailer:false, trailerCheck:{}, vendedorNombre:"", vendedorTelefono:"" });
   const [saved, setSaved] = useState(false);
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
   function toggleExtra(id) {
@@ -1412,6 +1412,17 @@ function NewClient({ data, setPage }) {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Vendedor */}
+        <div style={{ background:"#111", borderRadius:14, padding:14, border:"1px solid #22c55e33" }}>
+          <label style={{ color:"#22c55e", fontSize:11, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", display:"block", marginBottom:10 }}>🧑‍💼 Vendedor que realizó el alta</label>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            <input value={form.vendedorNombre} onChange={e => set("vendedorNombre", e.target.value)} placeholder="Nombre del vendedor"
+              style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"#0a0a0a", border:"1px solid #22c55e33", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+            <input value={form.vendedorTelefono} onChange={e => set("vendedorTelefono", e.target.value)} placeholder="Teléfono del vendedor" type="tel"
+              style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"#0a0a0a", border:"1px solid #22c55e33", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+          </div>
         </div>
 
         <div>
@@ -4839,6 +4850,281 @@ function GpsAlertas({ data, setPage }) {
   );
 }
 
+/* ─────────────── BUSCAR POR PATENTE ─────────────── */
+function BuscarPatente({ data, setPage, setSelectedClient, setSelectedCompany, setSelectedVehicle, setSelectedMaquina }) {
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState(null); // { tipo, entity, checks, repairs, healthHistory }
+
+  function buscar(q) {
+    const q2 = q.trim().toUpperCase();
+    if (!q2) { setResult(null); return; }
+
+    // 1) Cliente particular
+    const client = data.clients.find(c => (c.plate||"").toUpperCase() === q2);
+    if (client) {
+      const checks = (data.checks||[]).filter(ch => ch.clientId === client.id).sort((a,b) => b.createdAt - a.createdAt);
+      setResult({ tipo:"cliente", entity: client, checks, repairs: client.repairs||[] });
+      return;
+    }
+
+    // 2) Vehículo de empresa
+    for (const comp of (data.companies||[])) {
+      const veh = (comp.vehicles||[]).find(v => (v.plate||"").toUpperCase() === q2);
+      if (veh) {
+        const checks = (data.checks||[]).filter(ch => ch.vehicleId === veh.id).sort((a,b) => b.createdAt - a.createdAt);
+        setResult({ tipo:"vehiculo", entity: { ...veh, companyName: comp.name, companyId: comp.id }, comp, checks, repairs: veh.repairs||[] });
+        return;
+      }
+    }
+
+    // 3) Maquinaria (por dominio)
+    const maq = (data.maquinas||[]).find(m => (m.dominio||"").toUpperCase() === q2 || (m.nroChasis||"").toUpperCase() === q2 || (m.nroSerie||"").toUpperCase() === q2);
+    if (maq) {
+      setResult({ tipo:"maquina", entity: maq, checks: maq.checks||[], repairs: maq.repairs||[] });
+      return;
+    }
+
+    setResult({ tipo:"notfound" });
+  }
+
+  function getHealth(ch, sections) {
+    const items = sections.flatMap(s => s.items);
+    const criticos = items.filter(i => (ch.itemStates||{})[i.id] === "critico").length;
+    const ok = items.filter(i => (ch.itemStates||{})[i.id] === "ok").length;
+    const pct = Math.round((ok / items.length) * 100);
+    const color = criticos > 0 ? "#ef4444" : pct >= 80 ? "#10b981" : "#f59e0b";
+    return { criticos, ok, pct, color, total: items.length };
+  }
+
+  const INP = { width:"100%", padding:"14px 18px", borderRadius:14, background:"#1a1a1a", border:"2px solid #f9731644", color:"#f1f5f9", fontSize:18, outline:"none", letterSpacing:"0.12em", fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, textTransform:"uppercase" };
+
+  const sections = result?.tipo === "maquina" ? MAQUINA_CHECK_SECTIONS : CHECK_SECTIONS;
+  const allChecks = result?.checks || [];
+  const allRepairs = result?.repairs || [];
+
+  // Estadísticas de salud del vehículo
+  const healthHistory = allChecks.map(ch => getHealth(ch, sections));
+  const lastHealth = healthHistory[0] || null;
+  const totalRepairCost = allRepairs.reduce((a, r) => a + (Number(r.costo)||0), 0);
+  const lastYearRepairs = allRepairs.filter(r => r.createdAt > Date.now() - 365*24*3600000);
+  const lastYearCost = lastYearRepairs.reduce((a, r) => a + (Number(r.costo)||0), 0);
+
+  return (
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#f97316", margin:"0 0 6px", fontSize:26, fontWeight:900, letterSpacing:"0.03em", textTransform:"uppercase" }}>🔍 Buscar por Patente</h2>
+      <p style={{ color:"#6b7280", fontSize:13, margin:"0 0 20px" }}>Clientes, flota de empresas y maquinaria</p>
+
+      <div style={{ marginBottom:20 }}>
+        <input value={query} onChange={e => { setQuery(e.target.value.toUpperCase()); buscar(e.target.value); }}
+          placeholder="AB123CD"
+          style={INP}/>
+        <div style={{ color:"#4b5563", fontSize:11, marginTop:6, textAlign:"center" }}>Ingresá la patente, dominio o nro. de chasis</div>
+      </div>
+
+      {result === null && (
+        <div style={{ textAlign:"center", color:"#2d3340", padding:"48px 0" }}>
+          <div style={{ fontSize:52, marginBottom:12 }}>🔍</div>
+          <div style={{ fontSize:13, letterSpacing:"0.04em" }}>Escribí una patente para ver su historial</div>
+        </div>
+      )}
+
+      {result?.tipo === "notfound" && (
+        <div style={{ textAlign:"center", color:"#4b5563", padding:"40px 0" }}>
+          <div style={{ fontSize:48, marginBottom:12 }}>❌</div>
+          <div style={{ fontSize:14, fontWeight:700, color:"#ef4444", marginBottom:6 }}>No encontrado</div>
+          <div style={{ fontSize:13 }}>No hay ningún registro con ese dominio en el sistema.</div>
+        </div>
+      )}
+
+      {result && result.tipo !== "notfound" && (() => {
+        const e = result.entity;
+        const isMaq = result.tipo === "maquina";
+        const isComp = result.tipo === "vehiculo";
+        const isCli = result.tipo === "cliente";
+
+        return (
+          <>
+            {/* Cabecera del vehículo */}
+            <div style={{ background:"linear-gradient(145deg,#1c1c1c,#141414)", borderRadius:20, padding:20, border:"1px solid #f9731644", marginBottom:16, boxShadow:"0 4px 20px rgba(0,0,0,0.4)" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:14 }}>
+                <div style={{ width:56, height:56, borderRadius:16, background:"rgba(249,115,22,0.12)", border:"2px solid #f97316", display:"flex", alignItems:"center", justifyContent:"center", fontSize:28 }}>
+                  {isMaq ? (MAQUINA_TIPOS.find(t=>t.id===e.tipo)?.icon||"⚙️") : "🚗"}
+                </div>
+                <div>
+                  <div style={{ color:"#f1f5f9", fontWeight:900, fontSize:20 }}>
+                    {isMaq ? (e.nombre||e.tipo) : (e.plate||e.dominio||"—")}
+                  </div>
+                  <div style={{ color:"#f97316", fontSize:13, fontWeight:700 }}>
+                    {isCli ? "Cliente particular" : isComp ? `Empresa: ${e.companyName}` : `Maquinaria${e.cantera ? ` · ${e.cantera}` : ""}`}
+                  </div>
+                </div>
+              </div>
+              {[
+                isCli && ["👤 Cliente", e.name],
+                isCli && e.phone && ["📱 Teléfono", e.phone],
+                isCli && e.vehicle && ["🚗 Vehículo", e.vehicle],
+                isCli && e.vendedorNombre && ["🧑‍💼 Vendedor", e.vendedorNombre + (e.vendedorTelefono ? ` · ${e.vendedorTelefono}` : "")],
+                isComp && e.vehicle && ["🚛 Vehículo", e.vehicle],
+                isComp && e.nroMovil && ["🔢 Nro. Móvil", e.nroMovil],
+                isMaq && e.dominio && ["🔖 Dominio", e.dominio],
+                isMaq && e.nroChasis && ["🔩 Chasis", e.nroChasis],
+                isMaq && e.nroSerie && ["🔢 Serie", e.nroSerie],
+                isMaq && e.responsable && ["👤 Responsable", e.responsable],
+              ].filter(Boolean).map(([l,v]) => (
+                <div key={l} style={{ display:"flex", justifyContent:"space-between", gap:8, marginBottom:6 }}>
+                  <span style={{ color:"#6b7280", fontSize:13 }}>{l}</span>
+                  <span style={{ color:"#e5e7eb", fontSize:13, fontWeight:600, textAlign:"right" }}>{v}</span>
+                </div>
+              ))}
+
+              {/* Botón ir al perfil */}
+              <button onClick={() => {
+                if (isCli) { setSelectedClient(e); setPage("client-detail"); }
+                else if (isComp) { setSelectedCompany(result.comp); setSelectedVehicle(e); setPage("vehicle-detail"); }
+                else { setSelectedMaquina(e); setPage("maquina-detail"); }
+              }} style={{ marginTop:12, width:"100%", padding:"11px", borderRadius:12, background:"rgba(249,115,22,0.1)", border:"1px solid rgba(249,115,22,0.3)", color:"#f97316", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+                → Ver perfil completo
+              </button>
+            </div>
+
+            {/* Estadísticas de salud */}
+            <div style={{ background:"linear-gradient(145deg,#1b1b1b,#141414)", borderRadius:16, padding:16, border:"1px solid #222", marginBottom:16 }}>
+              <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", margin:"0 0 14px" }}>📊 Estadísticas del vehículo</h3>
+
+              {lastHealth ? (
+                <>
+                  <div style={{ background:"#111", borderRadius:12, padding:"12px 14px", marginBottom:12, border:"1px solid #2a2a2a" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+                      <span style={{ color:"#9ca3af", fontSize:12 }}>Salud — último chequeo ({new Date(allChecks[0].createdAt).toLocaleDateString("es-AR")})</span>
+                      <span style={{ color:lastHealth.color, fontWeight:900, fontSize:15 }}>{lastHealth.pct}%</span>
+                    </div>
+                    <div style={{ width:"100%", height:8, background:"#2a2a2a", borderRadius:4, overflow:"hidden", marginBottom:6 }}>
+                      <div style={{ width:`${lastHealth.pct}%`, height:"100%", background:lastHealth.color, borderRadius:4 }}/>
+                    </div>
+                    <div style={{ color:"#6b7280", fontSize:11 }}>
+                      {lastHealth.criticos > 0 ? `⚠️ ${lastHealth.criticos} ítems críticos` : `✓ ${lastHealth.ok}/${lastHealth.total} ítems OK`}
+                    </div>
+                  </div>
+
+                  {/* Evolución salud */}
+                  {healthHistory.length > 1 && (
+                    <div style={{ marginBottom:12 }}>
+                      <div style={{ color:"#6b7280", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>Evolución de salud</div>
+                      <div style={{ display:"flex", gap:4, alignItems:"flex-end", height:48 }}>
+                        {healthHistory.slice(0,8).reverse().map((h, idx) => (
+                          <div key={idx} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+                            <div style={{ width:"100%", borderRadius:3, background:h.color, transition:"height 0.4s" }} title={`${h.pct}%`}
+                              data-height={h.pct}
+                              ref={el => { if(el) el.style.height = `${Math.max(4, h.pct*0.42)}px`; }}/>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display:"flex", gap:4, marginTop:2 }}>
+                        {healthHistory.slice(0,8).reverse().map((h, idx) => (
+                          <div key={idx} style={{ flex:1, textAlign:"center", color:"#4b5563", fontSize:8 }}>{h.pct}%</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ color:"#4b5563", fontSize:13, textAlign:"center", padding:"12px 0" }}>Sin chequeos registrados</div>
+              )}
+
+              {/* Reparaciones */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:4 }}>
+                <div style={{ background:"#0f0f0f", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #1e1e1e" }}>
+                  <div style={{ color:"#a78bfa", fontWeight:900, fontSize:18 }}>{allRepairs.length}</div>
+                  <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase" }}>Trabajos</div>
+                </div>
+                <div style={{ background:"#0f0f0f", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #1e1e1e" }}>
+                  <div style={{ color:"#f97316", fontWeight:900, fontSize:13 }}>{formatMoney(totalRepairCost)}</div>
+                  <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase" }}>Total hist.</div>
+                </div>
+                <div style={{ background:"#0f0f0f", borderRadius:12, padding:"10px 8px", textAlign:"center", border:"1px solid #1e1e1e" }}>
+                  <div style={{ color:"#60a5fa", fontWeight:900, fontSize:13 }}>{formatMoney(lastYearCost)}</div>
+                  <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase" }}>Último año</div>
+                </div>
+              </div>
+
+              {/* Alerta salud económica */}
+              {allRepairs.length >= 2 && lastYearCost > 0 && (() => {
+                let alerta;
+                if (lastYearCost > 500000) alerta = { color:"#ef4444", bg:"#ef444422", border:"#ef444444", icon:"🔴", msg:`Gasto anual ${formatMoney(lastYearCost)} — Alto costo. Evaluar conveniencia.` };
+                else if (lastYearCost > 200000) alerta = { color:"#f59e0b", bg:"#f59e0b22", border:"#f59e0b44", icon:"🟡", msg:`Gasto anual ${formatMoney(lastYearCost)} — Costo moderado. Seguimiento recomendado.` };
+                else alerta = { color:"#10b981", bg:"#10b98122", border:"#10b98144", icon:"🟢", msg:`Gasto anual ${formatMoney(lastYearCost)} — Costo bajo. Buen estado económico.` };
+                return (
+                  <div style={{ background:alerta.bg, border:`1px solid ${alerta.border}`, borderRadius:10, padding:"10px 12px", marginTop:10, color:alerta.color, fontSize:12, fontWeight:600 }}>
+                    {alerta.icon} {alerta.msg}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Historial de chequeos */}
+            {allChecks.length > 0 && (
+              <div style={{ marginBottom:16 }}>
+                <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", margin:"0 0 12px" }}>
+                  ✅ Historial de chequeos ({allChecks.length})
+                </h3>
+                {allChecks.map((ch, idx) => {
+                  const h = getHealth(ch, sections);
+                  return (
+                    <div key={ch.id||ch.createdAt} style={{ background:"#1a1a1a", borderRadius:14, padding:"12px 14px", border:`1px solid ${h.color}33`, marginBottom:8 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+                        <span style={{ color:"#9ca3af", fontSize:12 }}>📅 {new Date(ch.createdAt).toLocaleDateString("es-AR")}{ch.perito ? ` · ${ch.perito}` : ""}</span>
+                        <span style={{ color:h.color, fontWeight:900, fontSize:14 }}>{h.pct}%</span>
+                      </div>
+                      <div style={{ width:"100%", height:5, background:"#2a2a2a", borderRadius:3, overflow:"hidden", marginBottom:6 }}>
+                        <div style={{ width:`${h.pct}%`, height:"100%", background:h.color, borderRadius:3 }}/>
+                      </div>
+                      <div style={{ color:"#6b7280", fontSize:11 }}>
+                        {h.criticos > 0 ? `⚠️ ${h.criticos} críticos` : `✓ ${h.ok}/${h.total} OK`}
+                        {ch.kms ? ` · ${Number(ch.kms).toLocaleString()} km` : ""}
+                        {ch.horasMotor ? ` · ${ch.horasMotor} hs` : ""}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Historial reparaciones */}
+            {allRepairs.length > 0 && (
+              <div>
+                <h3 style={{ color:"#e5e7eb", fontSize:13, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", margin:"0 0 12px" }}>
+                  🔧 Historial de reparaciones ({allRepairs.length})
+                </h3>
+                {[...allRepairs].sort((a,b) => b.createdAt - a.createdAt).map((r, idx) => {
+                  const cat = REPAIR_CATS.find(c => c.id === r.categoria) || REPAIR_CATS[REPAIR_CATS.length-1];
+                  const est = REPAIR_ESTADOS.find(e => e.id === (r.estado||"pendiente")) || REPAIR_ESTADOS[0];
+                  return (
+                    <div key={idx} style={{ background:"#111", borderRadius:12, padding:"12px 14px", border:`1px solid ${est.border}`, marginBottom:8 }}>
+                      <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+                        <span style={{ fontSize:18, flexShrink:0 }}>{cat.icon}</span>
+                        <div style={{ flex:1 }}>
+                          <div style={{ color:"#f1f5f9", fontWeight:700, fontSize:13, marginBottom:3 }}>{r.descripcion}</div>
+                          <div style={{ color:"#6b7280", fontSize:11 }}>
+                            {new Date(r.createdAt).toLocaleDateString("es-AR")}
+                            {r.taller ? ` · ${r.taller}` : ""}
+                            {" · "}<span style={{ color:"#a78bfa" }}>{cat.label}</span>
+                          </div>
+                          <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.border}`, marginTop:4, display:"inline-block" }}>{est.icon} {est.label}</span>
+                        </div>
+                        {r.costo > 0 && <div style={{ color:"#f97316", fontWeight:900, fontSize:13, flexShrink:0 }}>{formatMoney(r.costo)}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        );
+      })()}
+    </div>
+  );
+}
+
 /* ─────────────── APP ─────────────── */
 function App() {
   const firebaseReady = useFirebase();
@@ -4941,6 +5227,7 @@ function App() {
       {page === "checks"         && <Checks data={data} setPage={setPage} preselectedClientId={checkPreselectedClientId}/>}
       {page === "maquinaria"     && <MaquinariaList data={data} setPage={setPage} setSelectedMaquina={setSelectedMaquina}/>}
       {page === "new-maquina"    && <NewMaquina setPage={setPage} data={data}/>}
+      {page === "buscar-patente" && <BuscarPatente data={data} setPage={setPage} setSelectedClient={setSelectedClient} setSelectedCompany={setSelectedCompany} setSelectedVehicle={setSelectedVehicle} setSelectedMaquina={setSelectedMaquina}/>}
       {page === "maquina-detail" && (selectedMaquina
         ? <MaquinaDetail maquina={selectedMaquina} data={data} setPage={setPage} setSelectedMaquina={setSelectedMaquina}/>
         : <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"#6b7280" }}><span style={{ fontSize:48 }}>🏗️</span><span style={{ fontSize:15 }}>Seleccioná una máquina desde el listado.</span><button onClick={() => setPage("maquinaria")} style={{ marginTop:8, padding:"10px 24px", borderRadius:12, background:"#7c3aed22", border:"1px solid #7c3aed44", color:"#a78bfa", fontWeight:700, cursor:"pointer" }}>← Ir a Maquinaria</button></div>

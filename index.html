@@ -5337,28 +5337,11 @@ function LoginScreen({ onPerito, onVendedor }) {
 }
 
 /* ─────────────── VISTA VENDEDOR ─────────────── */
-function VendedorApp({ onSalir }) {
-  const [subPage, setSubPage] = useState("menu"); // "menu" | "new-client" | "new-company"
-  const [data, setData] = useState({ clients:[], companies:[], checks:[], maquinas:[] });
-  const [firebaseReady, setFirebaseReady] = useState(false);
+function VendedorApp({ onSalir, data }) {
+  const [subPage, setSubPage] = useState("menu");
 
-  React.useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async user => {
-      if (!user) { await signInAnonymously(auth); }
-      else { setFirebaseReady(true); }
-    });
-    return unsub;
-  }, []);
-
-  React.useEffect(() => {
-    if (!firebaseReady) return;
-    const unsubClients   = onSnapshot(collection(db, "clients"),   snap => setData(p => ({ ...p, clients:   snap.docs.map(d => ({ ...d.data(), id: d.id })) })));
-    const unsubCompanies = onSnapshot(collection(db, "companies"), snap => setData(p => ({ ...p, companies: snap.docs.map(d => ({ ...d.data(), id: d.id })) })));
-    return () => { unsubClients(); unsubCompanies(); };
-  }, [firebaseReady]);
-
-  if (subPage === "new-client")  return <NewClient data={data} setPage={p => p === "clients" ? setSubPage("menu") : setSubPage(p)}/>;
-  if (subPage === "new-company") return <NewCompany setPage={p => p === "companies" ? setSubPage("menu") : setSubPage(p)}/>;
+  if (subPage === "new-client")  return <NewClient data={data} setPage={p => (p === "clients" || p === "dashboard") ? setSubPage("menu") : setSubPage(p)}/>;
+  if (subPage === "new-company") return <NewCompany setPage={p => (p === "companies" || p === "dashboard") ? setSubPage("menu") : setSubPage(p)}/>;
 
   return (
     <div style={{ minHeight:"100vh", background:"#080808", fontFamily:"'Barlow', system-ui, sans-serif", color:"#e8eaed" }}>
@@ -5420,7 +5403,7 @@ function VendedorApp({ onSalir }) {
 /* ─────────────── APP ─────────────── */
 function App() {
   const firebaseReady = useFirebase();
-  const [rol, setRol] = useState(null); // null | "perito" | "vendedor"
+  const [rol, setRol] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [data, setData] = useState({ clients: [], checks: [], companies: [], maquinas: [] });
   const [selectedClient, setSelectedClient] = useState(null);
@@ -5429,18 +5412,17 @@ function App() {
   const [selectedMaquina, setSelectedMaquina] = useState(null);
   const [checkPreselectedClientId, setCheckPreselectedClientId] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // Mostrar pantalla de login si no hay rol elegido
-  if (!rol) return <LoginScreen onPerito={() => setRol("perito")} onVendedor={() => setRol("vendedor")}/>;
-  if (rol === "vendedor") return <VendedorApp onSalir={() => setRol(null)}/>;
-
   useEffect(() => {
     if (!firebaseReady) return;
     const { db, collection, onSnapshot } = window._firebase;
 
+    // Timeout de seguridad: si en 5 segundos no llega nada, igual mostramos la app
+    const safetyTimer = setTimeout(() => setLoading(false), 5000);
+
     const unsubClients = onSnapshot(collection(db, "clients"), snap => {
       const clients = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       setData(prev => ({ ...prev, clients }));
+      clearTimeout(safetyTimer);
       setLoading(false);
     });
     const unsubChecks = onSnapshot(collection(db, "checks"), snap => {
@@ -5464,7 +5446,7 @@ function App() {
       });
     });
 
-    return () => { unsubClients(); unsubChecks(); unsubCompanies(); unsubMaquinas(); };
+    return () => { clearTimeout(safetyTimer); unsubClients(); unsubChecks(); unsubCompanies(); unsubMaquinas(); };
   }, [firebaseReady]);
 
   if (!firebaseReady || loading) return (
@@ -5486,6 +5468,10 @@ function App() {
       <style>{`@keyframes pulsebar { 0%,100%{opacity:0.4;transform:scaleX(0.5)} 50%{opacity:1;transform:scaleX(1)} }`}</style>
     </div>
   );
+
+  // Rol checks AFTER all hooks AND after Firebase is ready
+  if (!rol) return <LoginScreen onPerito={() => setRol("perito")} onVendedor={() => setRol("vendedor")}/>;
+  if (rol === "vendedor") return <VendedorApp onSalir={() => setRol(null)} data={data}/>;
 
   const totalEntities = data.clients.length + data.companies.reduce((a,c) => a + (c.vehicles||[]).length, 0);
 

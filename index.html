@@ -57,6 +57,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey:            "AIzaSyCGTLRdgGlOlzd-tjkq3hNYrFyMWZCkCc8",
@@ -70,8 +71,9 @@
 
   const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
+  const storage = getStorage(app);
 
-  window._firebase = { db, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot };
+  window._firebase = { db, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, storage, ref, uploadBytes, getDownloadURL, deleteObject };
   window._firebaseReady = true;
   window.dispatchEvent(new Event("firebase-ready"));
 </script>
@@ -674,8 +676,11 @@ function Dashboard({ data, setPage }) {
         <button onClick={() => setPage("new-maquina")} style={{ width:"100%", padding:"14px", background:"rgba(167,139,250,0.05)", border:"1px solid rgba(167,139,250,0.18)", borderRadius:12, color:"#a78bfa", fontWeight:700, fontSize:13, cursor:"pointer", marginBottom:10, letterSpacing:"0.02em" }}>
           🏗️ Nueva Máquina
         </button>
-        <button onClick={() => setPage("repairs")} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#7c3aed,#6d28d9)", border:"none", borderRadius:14, color:"#fff", fontWeight:900, fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
+        <button onClick={() => setPage("repairs")} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#7c3aed,#6d28d9)", border:"none", borderRadius:14, color:"#fff", fontWeight:900, fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:10 }}>
           🔧 Pedido de Reparaciones
+        </button>
+        <button onClick={() => setPage("config-precios")} style={{ width:"100%", padding:"14px", background:"rgba(249,115,22,0.05)", border:"1px solid rgba(249,115,22,0.18)", borderRadius:12, color:"#f97316", fontWeight:700, fontSize:13, cursor:"pointer", letterSpacing:"0.02em" }}>
+          💰 Configurar Precios
         </button>
       </div>
     </div>
@@ -800,6 +805,13 @@ function generarInformeWpp(entity, ch, isCompanyVehicle = false) {
 
   if (ch.recomendaciones) { msg += `━━━━━━━━━━━━━━━━━━━━\n💡 *Recomendaciones:*\n${ch.recomendaciones}\n\n`; }
   if (ch.detalle)         { msg += `📝 *Detalle:*\n${ch.detalle}\n\n`; }
+  const fotosEntity = entity.fotos || [];
+  if (fotosEntity.length > 0) {
+    msg += `━━━━━━━━━━━━━━━━━━━━\n📷 *Fotos del vehículo:* ${fotosEntity.length} foto${fotosEntity.length > 1 ? "s" : ""} registrada${fotosEntity.length > 1 ? "s" : ""}.\n`;
+    fotosEntity.slice(0, 3).forEach((f, i) => { msg += `  📸 Foto ${i+1}: ${f.url}\n`; });
+    if (fotosEntity.length > 3) msg += `  ...y ${fotosEntity.length - 3} más.\n`;
+    msg += `\n`;
+  }
   msg += `━━━━━━━━━━━━━━━━━━━━\n_ASN · Control y Prevención Vehicular_`;
   return msg;
 }
@@ -1248,6 +1260,26 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
               </div>
             ))}
             {client.direccion && <div style={{ marginTop:8 }}><NavigateButton entity={client}/></div>}
+
+            {/* Fotos de alta — vehículo y tarjeta verde */}
+            {(client.fotos||[]).filter(f => f.tipo === "vehiculo" || f.tipo === "tarjeta").length > 0 && (
+              <div style={{ marginTop:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                {["vehiculo","tarjeta"].map(tipo => {
+                  const foto = (client.fotos||[]).find(f => f.tipo === tipo);
+                  if (!foto) return null;
+                  return (
+                    <div key={tipo}>
+                      <div style={{ color:"#4b5563", fontSize:10, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>
+                        {tipo === "vehiculo" ? "🚗 Vehículo" : "📄 Tarjeta verde"}
+                      </div>
+                      <img src={foto.url} alt={foto.nombre}
+                        style={{ width:"100%", aspectRatio:"4/3", objectFit:"cover", borderRadius:10, border:"1px solid #2a2a2a", cursor:"pointer" }}
+                        onClick={() => window.open(foto.url, "_blank")}/>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
         {/* Servicios adicionales */}
@@ -1284,12 +1316,15 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
       )}
 
       {/* Tabs */}
-      <div style={{ display:"grid", gridTemplateColumns: client.tieneTrailer ? "1fr 1fr 1fr" : "1fr 1fr", gap:8, marginBottom:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns: client.tieneTrailer ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap:8, marginBottom:16 }}>
         <button onClick={() => setTab("chequeos")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`2px solid ${tab==="chequeos" ? "#f97316" : "#2a2a2a"}`, background: tab==="chequeos" ? "#f9731622" : "#111", color: tab==="chequeos" ? "#f97316" : "#6b7280", fontWeight:700, fontSize:13 }}>
           ✅ Chequeos ({clientChecks.length})
         </button>
         <button onClick={() => setTab("reparaciones")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`1px solid ${tab==="reparaciones" ? "#a78bfa" : "#222"}`, background: tab==="reparaciones" ? "rgba(167,139,250,0.1)" : "#111", color: tab==="reparaciones" ? "#a78bfa" : "#374151", fontWeight:700, fontSize:12, letterSpacing:"0.04em" }}>
           🔧 Reparaciones ({repairs.length})
+        </button>
+        <button onClick={() => setTab("fotos")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`1px solid ${tab==="fotos" ? "#10b981" : "#222"}`, background: tab==="fotos" ? "rgba(16,185,129,0.1)" : "#111", color: tab==="fotos" ? "#10b981" : "#374151", fontWeight:700, fontSize:12 }}>
+          📷 Fotos ({(client.fotos||[]).length})
         </button>
         {client.tieneTrailer && (
           <button onClick={() => setTab("trailer")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`2px solid ${tab==="trailer" ? "#f59e0b" : "#2a2a2a"}`, background: tab==="trailer" ? "#f59e0b22" : "#111", color: tab==="trailer" ? "#f59e0b" : "#6b7280", fontWeight:700, fontSize:13 }}>
@@ -1350,6 +1385,17 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
         {showRepairForm && <RepairForm onSave={addRepair} onCancel={() => setShowRepairForm(false)}/>}
         <RepairList repairs={repairs} onDelete={deleteRepair} onShare={shareRepair} onToggleEstado={toggleRepairEstado}/>
       </>)}
+
+      {tab === "fotos" && (
+        <FotosVehiculo
+          entityId={client.id}
+          entityType="clients"
+          fotos={client.fotos || []}
+          onFotosChange={async (nuevasFotos) => {
+            await fbUpdate("clients", client.id, { fotos: nuevasFotos });
+          }}
+        />
+      )}
 
       {confirmDeleteId && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", backdropFilter:"blur(4px)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
@@ -1443,6 +1489,105 @@ function NavigateButton({ entity }) {
   );
 }
 
+/* ─────────────── FOTOS VEHÍCULO ─────────────── */
+async function subirFoto(file, path) {
+  const { storage, ref, uploadBytes, getDownloadURL } = window._firebase;
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file);
+  return await getDownloadURL(storageRef);
+}
+
+async function eliminarFotoStorage(url) {
+  try {
+    const { storage, ref, deleteObject } = window._firebase;
+    const storageRef = ref(storage, url);
+    await deleteObject(storageRef);
+  } catch(e) {}
+}
+
+function FotosVehiculo({ entityId, entityType, fotos = [], onFotosChange }) {
+  const [uploading, setUploading] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
+  const inputRef = useRef(null);
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const path = `fotos/${entityType}/${entityId}/${Date.now()}_${file.name}`;
+      const url = await subirFoto(file, path);
+      const nuevaFoto = { url, path, fecha: Date.now(), nombre: file.name };
+      const nuevasFotos = [...fotos, nuevaFoto];
+      await onFotosChange(nuevasFotos);
+    } catch(err) {
+      alert("Error al subir la foto. Verificá que Firebase Storage esté habilitado.");
+    }
+    setUploading(false);
+    e.target.value = "";
+  }
+
+  async function eliminar(idx) {
+    if (!confirm("¿Eliminar esta foto?")) return;
+    const foto = fotos[idx];
+    await eliminarFotoStorage(foto.path);
+    const nuevasFotos = fotos.filter((_, i) => i !== idx);
+    await onFotosChange(nuevasFotos);
+  }
+
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+        <label style={{ color:"#9ca3af", fontSize:12, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase" }}>📷 Fotos del vehículo ({fotos.length})</label>
+        <button onClick={() => inputRef.current?.click()} disabled={uploading}
+          style={{ padding:"8px 14px", borderRadius:10, background: uploading ? "#1a1a1a" : "rgba(249,115,22,0.12)",
+            border:`1px solid ${uploading ? "#333" : "rgba(249,115,22,0.4)"}`,
+            color: uploading ? "#4b5563" : "#f97316", fontWeight:700, fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
+          {uploading ? "⏳ Subiendo..." : "📷 Sacar foto"}
+        </button>
+        <input ref={inputRef} type="file" accept="image/*" capture="environment"
+          onChange={handleFile} style={{ display:"none" }}/>
+      </div>
+
+      {fotos.length === 0 && (
+        <div style={{ textAlign:"center", padding:"24px 0", color:"#2d3340", border:"1px dashed #2a2a2a", borderRadius:12 }}>
+          <div style={{ fontSize:32, marginBottom:6 }}>📷</div>
+          <div style={{ fontSize:12 }}>Sin fotos aún. Tocá "Sacar foto" para agregar.</div>
+        </div>
+      )}
+
+      {fotos.length > 0 && (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+          {fotos.map((f, idx) => (
+            <div key={idx} style={{ position:"relative", borderRadius:10, overflow:"hidden", aspectRatio:"1", background:"#111", border:"1px solid #2a2a2a" }}>
+              <img src={f.url} alt={`Foto ${idx+1}`} onClick={() => setLightbox(f)}
+                style={{ width:"100%", height:"100%", objectFit:"cover", cursor:"pointer" }}/>
+              <button onClick={() => eliminar(idx)}
+                style={{ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%",
+                  background:"rgba(0,0,0,0.7)", border:"none", color:"#ef4444", fontSize:13,
+                  cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>×</button>
+              <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"rgba(0,0,0,0.6)",
+                padding:"3px 6px", fontSize:9, color:"#9ca3af" }}>
+                {new Date(f.fecha).toLocaleDateString("es-AR")}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div onClick={() => setLightbox(null)}
+          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.95)", zIndex:1000,
+            display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <img src={lightbox.url} style={{ maxWidth:"100%", maxHeight:"80vh", borderRadius:12, objectFit:"contain" }}/>
+          <div style={{ color:"#6b7280", fontSize:12, marginTop:10 }}>{new Date(lightbox.fecha).toLocaleDateString("es-AR")} · Tocá para cerrar</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─────────────── NEW CLIENT ─────────────── */
 function Field({ label, value, onChange, placeholder, type="text" }) {
   return (
@@ -1458,7 +1603,25 @@ function NewClient({ data, setPage }) {
   const [form, setForm] = useState({ name:"", phone:"", vehicle:"", plate:"", service:"base", extras:[], notes:"", tieneTrailer:false, trailerCheck:{}, vendedorNombre:"", vendedorTelefono:"", direccion:"", lat:null, lng:null });
   const [saved, setSaved] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [fotoVehiculo, setFotoVehiculo] = useState(null);   // { dataUrl, file }
+  const [fotoTarjeta, setFotoTarjeta]   = useState(null);
+  const [uploadingFotos, setUploadingFotos] = useState(false);
+  const inputVehRef = useRef(null);
+  const inputTarjRef = useRef(null);
+
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  function handleFotoChange(e, tipo) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      if (tipo === "vehiculo") setFotoVehiculo({ dataUrl: ev.target.result, file });
+      else setFotoTarjeta({ dataUrl: ev.target.result, file });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
 
   function detectarUbicacion() {
     if (!navigator.geolocation) { alert("Tu dispositivo no soporta GPS."); return; }
@@ -1488,7 +1651,27 @@ function NewClient({ data, setPage }) {
   }
   async function handleSave() {
     if (!form.name || !form.phone || !form.vehicle || !form.plate) { alert("Completá nombre, teléfono, vehículo y dominio."); return; }
-    await fbAdd("clients", { ...form, createdAt: Date.now() });
+    setUploadingFotos(true);
+    const fotos = [];
+    const tempId = `${Date.now()}_${form.plate}`;
+    try {
+      if (fotoVehiculo) {
+        const path = `fotos/clients/${tempId}/vehiculo_${Date.now()}.jpg`;
+        const url = await subirFoto(fotoVehiculo.file, path);
+        fotos.push({ url, path, fecha: Date.now(), tipo:"vehiculo", nombre:"Foto del vehículo" });
+      }
+      if (fotoTarjeta) {
+        const path = `fotos/clients/${tempId}/tarjeta_${Date.now()}.jpg`;
+        const url = await subirFoto(fotoTarjeta.file, path);
+        fotos.push({ url, path, fecha: Date.now(), tipo:"tarjeta", nombre:"Tarjeta verde" });
+      }
+    } catch(err) {
+      alert("Error al subir fotos. Verificá tu conexión o los permisos de Storage.");
+      setUploadingFotos(false);
+      return;
+    }
+    await fbAdd("clients", { ...form, fotos, createdAt: Date.now() });
+    setUploadingFotos(false);
     setSaved(true);
     setTimeout(() => { setSaved(false); setPage("clients"); }, 1200);
   }
@@ -1514,12 +1697,16 @@ function NewClient({ data, setPage }) {
         <div>
           <label style={{ color:"#9ca3af", fontSize:12, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Plan contratado</label>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-            {PLANS.map(s => (
-              <button key={s.id} onClick={() => set("service", s.id)} style={{ padding:"12px 6px", borderRadius:12, cursor:"pointer", border:`1px solid ${form.service===s.id ? s.color : "#222"}`, background: form.service===s.id ? `${s.color}12` : "#111", color: form.service===s.id ? s.color : "#374151", fontWeight:700, fontSize:12, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-                <span style={{ fontSize:20 }}>{s.icon}</span>
-                <span>{s.name}</span>
-              </button>
-            ))}
+            {PLANS.map(s => {
+              const precio = data.precios?.[s.id]?.precio || 0;
+              return (
+                <button key={s.id} onClick={() => set("service", s.id)} style={{ padding:"12px 6px", borderRadius:12, cursor:"pointer", border:`1px solid ${form.service===s.id ? s.color : "#222"}`, background: form.service===s.id ? `${s.color}12` : "#111", color: form.service===s.id ? s.color : "#374151", fontWeight:700, fontSize:12, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                  <span style={{ fontSize:20 }}>{s.icon}</span>
+                  <span>{s.name}</span>
+                  {precio > 0 && <span style={{ fontSize:10, color: form.service===s.id ? s.color : "#4b5563", fontWeight:600 }}>{formatMoney(precio)}</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -1529,10 +1716,12 @@ function NewClient({ data, setPage }) {
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {EXTRA_SERVICES.map(s => {
               const active = form.extras.includes(s.id);
+              const precio = data.precios?.[s.id]?.precio || 0;
               return (
                 <button key={s.id} onClick={() => toggleExtra(s.id)} style={{ padding:"11px 14px", borderRadius:12, cursor:"pointer", border:`1px solid ${active ? s.color : "#202020"}`, background: active ? `${s.color}10` : "#111", color: active ? s.color : "#374151", fontWeight:700, fontSize:13, display:"flex", alignItems:"center", gap:10, textAlign:"left" }}>
                   <span style={{ fontSize:18 }}>{s.icon}</span>
                   <span style={{ flex:1 }}>{s.name}</span>
+                  {precio > 0 && <span style={{ color: active ? s.color : "#4b5563", fontSize:11, fontWeight:700 }}>{formatMoney(precio)}</span>}
                   <span style={{ fontSize:16 }}>{active ? "✓" : "+"}</span>
                 </button>
               );
@@ -1572,13 +1761,58 @@ function NewClient({ data, setPage }) {
           </div>
         </div>
 
+        {/* Fotos */}
+        <div style={{ background:"#111", borderRadius:14, padding:14, border:"1px solid #10b98133" }}>
+          <label style={{ color:"#10b981", fontSize:11, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", display:"block", marginBottom:12 }}>📷 Fotos del alta</label>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+
+            {/* Foto vehículo */}
+            <div>
+              <div style={{ color:"#6b7280", fontSize:11, fontWeight:700, marginBottom:6 }}>🚗 Vehículo</div>
+              {fotoVehiculo ? (
+                <div style={{ position:"relative", borderRadius:10, overflow:"hidden", aspectRatio:"4/3", background:"#0a0a0a" }}>
+                  <img src={fotoVehiculo.dataUrl} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                  <button onClick={() => setFotoVehiculo(null)}
+                    style={{ position:"absolute", top:4, right:4, width:24, height:24, borderRadius:"50%", background:"rgba(0,0,0,0.75)", border:"none", color:"#ef4444", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
+                </div>
+              ) : (
+                <button onClick={() => inputVehRef.current?.click()}
+                  style={{ width:"100%", aspectRatio:"4/3", borderRadius:10, background:"#0a0a0a", border:"2px dashed #10b98144", color:"#10b981", fontWeight:700, fontSize:13, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6 }}>
+                  <span style={{ fontSize:28 }}>📷</span>
+                  <span style={{ fontSize:11 }}>Sacar foto</span>
+                </button>
+              )}
+              <input ref={inputVehRef} type="file" accept="image/*" capture="environment" onChange={e => handleFotoChange(e,"vehiculo")} style={{ display:"none" }}/>
+            </div>
+
+            {/* Foto tarjeta verde */}
+            <div>
+              <div style={{ color:"#6b7280", fontSize:11, fontWeight:700, marginBottom:6 }}>📄 Tarjeta verde</div>
+              {fotoTarjeta ? (
+                <div style={{ position:"relative", borderRadius:10, overflow:"hidden", aspectRatio:"4/3", background:"#0a0a0a" }}>
+                  <img src={fotoTarjeta.dataUrl} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                  <button onClick={() => setFotoTarjeta(null)}
+                    style={{ position:"absolute", top:4, right:4, width:24, height:24, borderRadius:"50%", background:"rgba(0,0,0,0.75)", border:"none", color:"#ef4444", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
+                </div>
+              ) : (
+                <button onClick={() => inputTarjRef.current?.click()}
+                  style={{ width:"100%", aspectRatio:"4/3", borderRadius:10, background:"#0a0a0a", border:"2px dashed #10b98144", color:"#10b981", fontWeight:700, fontSize:13, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6 }}>
+                  <span style={{ fontSize:28 }}>📄</span>
+                  <span style={{ fontSize:11 }}>Sacar foto</span>
+                </button>
+              )}
+              <input ref={inputTarjRef} type="file" accept="image/*" capture="environment" onChange={e => handleFotoChange(e,"tarjeta")} style={{ display:"none" }}/>
+            </div>
+          </div>
+        </div>
+
         <div>
           <label style={{ color:"#9ca3af", fontSize:12, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Notas (opcional)</label>
           <textarea value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Observaciones adicionales..." rows={3}
             style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#0f0f0f", border:"1px solid #252525", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
         </div>
-        <button onClick={handleSave} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#f97316,#c2400c)", border:"none", color:"#fff", borderRadius:12, cursor:"pointer", fontWeight:800, fontSize:15, marginTop:8, letterSpacing:"0.06em", textTransform:"uppercase", boxShadow:"0 4px 20px rgba(249,115,22,0.35), inset 0 1px 0 rgba(255,255,255,0.1)" }}>
-          Guardar Cliente
+        <button onClick={handleSave} disabled={uploadingFotos} style={{ width:"100%", padding:"16px", background: uploadingFotos ? "#1a1a1a" : "linear-gradient(135deg,#f97316,#c2400c)", border:"none", color: uploadingFotos ? "#4b5563" : "#fff", borderRadius:12, cursor: uploadingFotos ? "default" : "pointer", fontWeight:800, fontSize:15, marginTop:8, letterSpacing:"0.06em", textTransform:"uppercase", boxShadow:"0 4px 20px rgba(249,115,22,0.35), inset 0 1px 0 rgba(255,255,255,0.1)" }}>
+          {uploadingFotos ? "⏳ Subiendo fotos..." : "Guardar Cliente"}
         </button>
       </div>
     </div>
@@ -1628,7 +1862,24 @@ function NewCompany({ setPage }) {
   const [form, setForm] = useState({ name:"", phone:"", cuit:"", address:"", notes:"", lat:null, lng:null });
   const [saved, setSaved] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [fotoEmpresa, setFotoEmpresa] = useState(null);
+  const [fotoTarjeta, setFotoTarjeta] = useState(null);
+  const [uploadingFotos, setUploadingFotos] = useState(false);
+  const inputEmpRef  = useRef(null);
+  const inputTarjRef = useRef(null);
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  function handleFotoChange(e, tipo) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      if (tipo === "empresa") setFotoEmpresa({ dataUrl: ev.target.result, file });
+      else setFotoTarjeta({ dataUrl: ev.target.result, file });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
 
   function detectarUbicacion() {
     if (!navigator.geolocation) { alert("Tu dispositivo no soporta GPS."); return; }
@@ -1652,10 +1903,31 @@ function NewCompany({ setPage }) {
 
   async function handleSave() {
     if (!form.name) { alert("Ingresá el nombre de la empresa."); return; }
-    await fbAdd("companies", { ...form, vehicles: [], createdAt: Date.now() });
+    setUploadingFotos(true);
+    const fotos = [];
+    const tempId = `${Date.now()}_${form.name.replace(/\s/g,"_")}`;
+    try {
+      if (fotoEmpresa) {
+        const path = `fotos/companies/${tempId}/empresa_${Date.now()}.jpg`;
+        const url = await subirFoto(fotoEmpresa.file, path);
+        fotos.push({ url, path, fecha: Date.now(), tipo:"empresa", nombre:"Foto de la empresa/vehículo" });
+      }
+      if (fotoTarjeta) {
+        const path = `fotos/companies/${tempId}/tarjeta_${Date.now()}.jpg`;
+        const url = await subirFoto(fotoTarjeta.file, path);
+        fotos.push({ url, path, fecha: Date.now(), tipo:"tarjeta", nombre:"Tarjeta verde" });
+      }
+    } catch(err) {
+      alert("Error al subir fotos.");
+      setUploadingFotos(false);
+      return;
+    }
+    await fbAdd("companies", { ...form, fotos, vehicles: [], createdAt: Date.now() });
+    setUploadingFotos(false);
     setSaved(true);
     setTimeout(() => { setSaved(false); setPage("companies"); }, 1200);
   }
+
   if (saved) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"80vh", gap:16 }}>
       <div style={{ fontSize:64 }}>✅</div>
@@ -1677,13 +1949,43 @@ function NewCompany({ setPage }) {
           </div>
         ))}
         <AddressField value={form.address} onChange={v => set("address", v)} onGps={detectarUbicacion} gpsLoading={gpsLoading} hasCoords={!!(form.lat && form.lng)}/>
+
+        {/* Fotos */}
+        <div style={{ background:"#111", borderRadius:14, padding:14, border:"1px solid #10b98133" }}>
+          <label style={{ color:"#10b981", fontSize:11, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", display:"block", marginBottom:12 }}>📷 Fotos del alta</label>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            {[
+              { label:"🚛 Vehículo / Local", tipo:"empresa", foto:fotoEmpresa, ref:inputEmpRef, setFoto:setFotoEmpresa },
+              { label:"📄 Tarjeta verde",    tipo:"tarjeta", foto:fotoTarjeta, ref:inputTarjRef, setFoto:setFotoTarjeta }
+            ].map(({ label, tipo, foto, ref: r, setFoto }) => (
+              <div key={tipo}>
+                <div style={{ color:"#6b7280", fontSize:11, fontWeight:700, marginBottom:6 }}>{label}</div>
+                {foto ? (
+                  <div style={{ position:"relative", borderRadius:10, overflow:"hidden", aspectRatio:"4/3", background:"#0a0a0a" }}>
+                    <img src={foto.dataUrl} style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                    <button onClick={() => setFoto(null)}
+                      style={{ position:"absolute", top:4, right:4, width:24, height:24, borderRadius:"50%", background:"rgba(0,0,0,0.75)", border:"none", color:"#ef4444", fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>×</button>
+                  </div>
+                ) : (
+                  <button onClick={() => r.current?.click()}
+                    style={{ width:"100%", aspectRatio:"4/3", borderRadius:10, background:"#0a0a0a", border:"2px dashed #10b98144", color:"#10b981", fontWeight:700, fontSize:13, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6 }}>
+                    <span style={{ fontSize:28 }}>📷</span>
+                    <span style={{ fontSize:11 }}>Sacar foto</span>
+                  </button>
+                )}
+                <input ref={r} type="file" accept="image/*" capture="environment" onChange={e => handleFotoChange(e, tipo)} style={{ display:"none" }}/>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div>
           <label style={{ color:"#9ca3af", fontSize:12, fontWeight:700, letterSpacing:"0.05em", textTransform:"uppercase", display:"block", marginBottom:8 }}>Notas (opcional)</label>
           <textarea value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Observaciones sobre la empresa..." rows={3}
             style={{ width:"100%", padding:"12px 14px", borderRadius:10, background:"#0f0f0f", border:"1px solid #252525", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none", boxShadow:"inset 0 1px 4px rgba(0,0,0,0.4)" }}/>
         </div>
-        <button onClick={handleSave} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#3b82f6,#2563eb)", border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:16, marginTop:8 }}>
-          Guardar Empresa
+        <button onClick={handleSave} disabled={uploadingFotos} style={{ width:"100%", padding:"16px", background: uploadingFotos ? "#1a1a1a" : "linear-gradient(135deg,#3b82f6,#2563eb)", border:"none", color: uploadingFotos ? "#4b5563" : "#fff", borderRadius:14, cursor: uploadingFotos ? "default" : "pointer", fontWeight:900, fontSize:16, marginTop:8 }}>
+          {uploadingFotos ? "⏳ Subiendo fotos..." : "Guardar Empresa"}
         </button>
       </div>
     </div>
@@ -2124,12 +2426,15 @@ function VehicleDetail({ vehicle, data, setPage }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display:"grid", gridTemplateColumns: vehicle.tieneTrailer ? "1fr 1fr 1fr" : "1fr 1fr", gap:8, marginBottom:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns: vehicle.tieneTrailer ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap:8, marginBottom:16 }}>
         <button onClick={() => setTab("chequeos")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`1px solid ${tab==="chequeos" ? "#60a5fa" : "#222"}`, background: tab==="chequeos" ? "rgba(96,165,250,0.1)" : "#111", color: tab==="chequeos" ? "#60a5fa" : "#374151", fontWeight:700, fontSize:12, letterSpacing:"0.04em" }}>
           ✅ Chequeos ({vChecks.length})
         </button>
         <button onClick={() => setTab("reparaciones")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`1px solid ${tab==="reparaciones" ? "#a78bfa" : "#222"}`, background: tab==="reparaciones" ? "rgba(167,139,250,0.1)" : "#111", color: tab==="reparaciones" ? "#a78bfa" : "#374151", fontWeight:700, fontSize:12, letterSpacing:"0.04em" }}>
           🔧 Reparaciones ({repairs.length})
+        </button>
+        <button onClick={() => setTab("fotos")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`1px solid ${tab==="fotos" ? "#10b981" : "#222"}`, background: tab==="fotos" ? "rgba(16,185,129,0.1)" : "#111", color: tab==="fotos" ? "#10b981" : "#374151", fontWeight:700, fontSize:12 }}>
+          📷 Fotos ({(vehicle.fotos||[]).length})
         </button>
         {vehicle.tieneTrailer && (
           <button onClick={() => setTab("trailer")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`2px solid ${tab==="trailer" ? "#f59e0b" : "#2a2a2a"}`, background: tab==="trailer" ? "#f59e0b22" : "#111", color: tab==="trailer" ? "#f59e0b" : "#6b7280", fontWeight:700, fontSize:13 }}>
@@ -2206,6 +2511,20 @@ function VehicleDetail({ vehicle, data, setPage }) {
         {showRepairForm && <RepairForm onSave={addRepair} onCancel={() => setShowRepairForm(false)}/>}
         <RepairList repairs={repairs} onDelete={deleteRepair} onShare={shareRepair} onToggleEstado={toggleRepairEstado}/>
       </>)}
+
+      {tab === "fotos" && (
+        <FotosVehiculo
+          entityId={vehicle.id || vehicle.plate}
+          entityType="vehicles"
+          fotos={vehicle.fotos || []}
+          onFotosChange={async (nuevasFotos) => {
+            const updatedVehicles = (company.vehicles||[]).map(v =>
+              v.plate === vehicle.plate ? { ...v, fotos: nuevasFotos } : v
+            );
+            await fbUpdate("companies", company.id, { vehicles: updatedVehicles });
+          }}
+        />
+      )}
 
       {tab === "trailer" && vehicle.tieneTrailer && company && (
         <TrailerHistorial
@@ -5086,6 +5405,97 @@ function GpsAlertas({ data, setPage }) {
   );
 }
 
+/* ─────────────── CONFIGURACIÓN DE PRECIOS ─────────────── */
+function ConfigPrecios({ data }) {
+  const precios = data.precios || {};
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const defaultPrecios = {
+    ...Object.fromEntries(PLANS.map(p => [p.id, ""])),
+    ...Object.fromEntries(EXTRA_SERVICES.map(s => [s.id, ""]))
+  };
+
+  useEffect(() => {
+    const merged = { ...defaultPrecios };
+    Object.entries(precios).forEach(([id, val]) => { if (val.precio !== undefined) merged[id] = val.precio; });
+    setForm(merged);
+  }, [data.precios]);
+
+  async function guardar() {
+    setSaving(true);
+    const { db, doc, setDoc } = window._firebase;
+    const allItems = [...PLANS, ...EXTRA_SERVICES];
+    await Promise.all(allItems.map(item =>
+      setDoc(doc(db, "precios", item.id), { precio: Number(form[item.id]) || 0 })
+    ));
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  const getPrecio = (id) => precios[id]?.precio || 0;
+
+  return (
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#f97316", margin:"0 0 4px", fontSize:26, fontWeight:900, letterSpacing:"0.03em", textTransform:"uppercase" }}>💰 Precios</h2>
+      <p style={{ color:"#6b7280", fontSize:13, margin:"0 0 24px" }}>Modificá los precios de planes y servicios adicionales</p>
+
+      {/* Planes */}
+      <div style={{ marginBottom:24 }}>
+        <div style={{ color:"#9ca3af", fontSize:11, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:12 }}>Planes</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {PLANS.map(plan => (
+            <div key={plan.id} style={{ background:"#1a1a1a", borderRadius:14, padding:"14px 16px", border:`1px solid ${plan.color}33`, display:"flex", alignItems:"center", gap:14 }}>
+              <div style={{ width:44, height:44, borderRadius:12, background:`${plan.color}15`, border:`1px solid ${plan.color}44`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{plan.icon}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ color:plan.color, fontWeight:800, fontSize:15, fontFamily:"'Barlow Condensed',sans-serif" }}>{plan.name}</div>
+                {getPrecio(plan.id) > 0 && <div style={{ color:"#4b5563", fontSize:11 }}>Actual: {formatMoney(getPrecio(plan.id))}</div>}
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ color:"#6b7280", fontSize:14, fontWeight:700 }}>$</span>
+                <input type="number" value={form[plan.id] ?? ""} onChange={e => setForm(f => ({ ...f, [plan.id]: e.target.value }))}
+                  placeholder="0"
+                  style={{ width:110, padding:"10px 12px", borderRadius:10, background:"#0f0f0f", border:`1px solid ${plan.color}44`, color:"#f1f5f9", fontSize:15, fontWeight:800, outline:"none", textAlign:"right" }}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Servicios adicionales */}
+      <div style={{ marginBottom:28 }}>
+        <div style={{ color:"#9ca3af", fontSize:11, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:12 }}>Servicios Adicionales</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {EXTRA_SERVICES.map(svc => (
+            <div key={svc.id} style={{ background:"#1a1a1a", borderRadius:14, padding:"14px 16px", border:`1px solid ${svc.color}33`, display:"flex", alignItems:"center", gap:14 }}>
+              <div style={{ width:44, height:44, borderRadius:12, background:`${svc.color}15`, border:`1px solid ${svc.color}44`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{svc.icon}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ color:svc.color, fontWeight:800, fontSize:14, fontFamily:"'Barlow Condensed',sans-serif" }}>{svc.name}</div>
+                {getPrecio(svc.id) > 0 && <div style={{ color:"#4b5563", fontSize:11 }}>Actual: {formatMoney(getPrecio(svc.id))}</div>}
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ color:"#6b7280", fontSize:14, fontWeight:700 }}>$</span>
+                <input type="number" value={form[svc.id] ?? ""} onChange={e => setForm(f => ({ ...f, [svc.id]: e.target.value }))}
+                  placeholder="0"
+                  style={{ width:110, padding:"10px 12px", borderRadius:10, background:"#0f0f0f", border:`1px solid ${svc.color}44`, color:"#f1f5f9", fontSize:15, fontWeight:800, outline:"none", textAlign:"right" }}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button onClick={guardar} disabled={saving}
+        style={{ width:"100%", padding:"16px", background: saved ? "linear-gradient(135deg,#10b981,#059669)" : "linear-gradient(135deg,#f97316,#c2400c)",
+          border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:16,
+          boxShadow: saved ? "0 4px 20px rgba(16,185,129,0.35)" : "0 4px 20px rgba(249,115,22,0.35)", transition:"all 0.3s" }}>
+        {saving ? "Guardando..." : saved ? "✓ Guardado" : "Guardar Precios"}
+      </button>
+    </div>
+  );
+}
+
 /* ─────────────── BUSCAR POR PATENTE ─────────────── */
 function BuscarPatente({ data, setPage, setSelectedClient, setSelectedCompany, setSelectedVehicle, setSelectedMaquina }) {
   const [query, setQuery] = useState("");
@@ -5588,8 +5998,13 @@ function App() {
         return maquinas.find(m => m.id === prev.id) || prev;
       });
     });
+    const unsubPrecios = onSnapshot(collection(db, "precios"), snap => {
+      const precios = {};
+      snap.docs.forEach(d => { precios[d.id] = d.data(); });
+      setData(prev => ({ ...prev, precios }));
+    });
 
-    return () => { clearTimeout(safetyTimer); unsubClients(); unsubChecks(); unsubCompanies(); unsubMaquinas(); };
+    return () => { clearTimeout(safetyTimer); unsubClients(); unsubChecks(); unsubCompanies(); unsubMaquinas(); unsubPrecios(); };
   }, [firebaseReady]);
 
   if (!firebaseReady || loading) return (
@@ -5651,6 +6066,7 @@ function App() {
       {page === "repairs"        && <RepairsPage data={data} setPage={setPage}/>}
       {page === "gps"            && <GpsAlertas data={data} setPage={setPage}/>}
       {page === "informe-flotas" && <InformeFlotas data={data} setPage={setPage}/>}
+      {page === "config-precios" && <ConfigPrecios data={data}/>}
       {page === "checks"         && <Checks data={data} setPage={setPage} preselectedClientId={checkPreselectedClientId}/>}
       {page === "maquinaria"     && <MaquinariaList data={data} setPage={setPage} setSelectedMaquina={setSelectedMaquina}/>}
       {page === "new-maquina"    && <NewMaquina setPage={setPage} data={data}/>}

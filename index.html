@@ -1083,10 +1083,50 @@ function CheckDetailModal({ ch, entity, isCompanyVehicle, onClose }) {
 function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
   const svc = SERVICES.find(s => s.id === client.service);
   const clientChecks = data.checks.filter(ch => ch.clientId === client.id).sort((a,b) => b.createdAt - a.createdAt);
-  const [tab, setTab] = useState("chequeos"); // "chequeos" | "reparaciones"
+  const [tab, setTab] = useState("chequeos");
   const [showRepairForm, setShowRepairForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [viewingCheck, setViewingCheck] = useState(null); // check a ver en detalle
+  const [viewingCheck, setViewingCheck] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+
+  function startEdit() {
+    setEditForm({
+      name: client.name||"", phone: client.phone||"", vehicle: client.vehicle||"",
+      plate: client.plate||"", notes: client.notes||"", direccion: client.direccion||"",
+      lat: client.lat||null, lng: client.lng||null,
+      vendedorNombre: client.vendedorNombre||"", vendedorTelefono: client.vendedorTelefono||""
+    });
+    setEditMode(true);
+  }
+
+  async function saveEdit() {
+    setSaving(true);
+    await fbUpdate("clients", client.id, editForm);
+    setEditMode(false);
+    setSaving(false);
+  }
+
+  function detectarUbicacion() {
+    if (!navigator.geolocation) { alert("Tu dispositivo no soporta GPS."); return; }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+          const json = await res.json();
+          setEditForm(f => ({ ...f, direccion: json.display_name || `${latitude},${longitude}`, lat: latitude, lng: longitude }));
+        } catch {
+          setEditForm(f => ({ ...f, direccion: `${latitude},${longitude}`, lat: latitude, lng: longitude }));
+        }
+        setGpsLoading(false);
+      },
+      () => { alert("No se pudo obtener la ubicación."); setGpsLoading(false); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
 
   // Reparaciones guardadas en el doc del cliente
   const repairs = client.repairs || [];
@@ -1161,18 +1201,55 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
       <div style={{ background:"#1a1a1a", borderRadius:20, padding:20, border:`1px solid ${svc?.color}44`, marginBottom:16 }}>
         <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:16 }}>
           <div style={{ width:56, height:56, borderRadius:16, background:`${svc?.color}22`, border:`2px solid ${svc?.color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>{svc?.icon}</div>
-          <div>
+          <div style={{ flex:1 }}>
             <h2 style={{ color:"#f1f5f9", margin:0, fontSize:20, fontWeight:900 }}>{client.name}</h2>
             <span style={{ color:svc?.color, fontSize:12, fontWeight:700 }}>Plan {svc?.name}</span>
           </div>
+          <button onClick={startEdit} style={{ padding:"7px 14px", borderRadius:10, background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.25)", color:"#f97316", fontWeight:700, fontSize:12, cursor:"pointer" }}>✏️ Editar</button>
         </div>
-        {[["Teléfono", client.phone], ["Vehículo", client.vehicle], ["Dominio", client.plate], client.direccion && ["📍 Dirección", client.direccion], client.notes && ["Notas", client.notes], client.vendedorNombre && ["🧑‍💼 Vendedor", client.vendedorNombre + (client.vendedorTelefono ? ` · ${client.vendedorTelefono}` : "")]].filter(Boolean).map(([l,v]) => (
-          <div key={l} style={{ display:"flex", justifyContent:"space-between", gap:8, marginBottom:8 }}>
-            <span style={{ color:"#6b7280", fontSize:13 }}>{l}</span>
-            <span style={{ color:"#e5e7eb", fontSize:13, fontWeight:600, textAlign:"right" }}>{v}</span>
+
+        {editMode && editForm ? (
+          <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:12 }}>
+            {[["Nombre", "name", "text"], ["Teléfono", "phone", "tel"], ["Vehículo", "vehicle", "text"], ["Dominio", "plate", "text"]].map(([label, key, type]) => (
+              <div key={key}>
+                <label style={{ color:"#6b7280", fontSize:11, fontWeight:700, textTransform:"uppercase", display:"block", marginBottom:4 }}>{label}</label>
+                <input type={type} value={editForm[key]} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                  style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"#0f0f0f", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+              </div>
+            ))}
+            <AddressField value={editForm.direccion} onChange={v => setEditForm(f => ({ ...f, direccion: v }))} onGps={detectarUbicacion} gpsLoading={gpsLoading} hasCoords={!!(editForm.lat && editForm.lng)}/>
+            {[["Vendedor", "vendedorNombre", "text"], ["Tel. Vendedor", "vendedorTelefono", "tel"]].map(([label, key, type]) => (
+              <div key={key}>
+                <label style={{ color:"#6b7280", fontSize:11, fontWeight:700, textTransform:"uppercase", display:"block", marginBottom:4 }}>{label}</label>
+                <input type={type} value={editForm[key]} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                  style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"#0f0f0f", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+              </div>
+            ))}
+            <div>
+              <label style={{ color:"#6b7280", fontSize:11, fontWeight:700, textTransform:"uppercase", display:"block", marginBottom:4 }}>Notas</label>
+              <textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+                style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"#0f0f0f", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none" }}/>
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={saveEdit} disabled={saving} style={{ flex:1, padding:"12px", borderRadius:12, background:"linear-gradient(135deg,#10b981,#059669)", border:"none", color:"#fff", fontWeight:900, fontSize:14, cursor:"pointer" }}>
+                {saving ? "Guardando..." : "✓ Guardar"}
+              </button>
+              <button onClick={() => setEditMode(false)} style={{ flex:1, padding:"12px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#6b7280", fontWeight:700, fontSize:14, cursor:"pointer" }}>
+                Cancelar
+              </button>
+            </div>
           </div>
-        ))}
-        {client.direccion && <div style={{ marginTop:8 }}><NavigateButton entity={client}/></div>}
+        ) : (
+          <>
+            {[["Teléfono", client.phone], ["Vehículo", client.vehicle], ["Dominio", client.plate], client.direccion && ["📍 Dirección", client.direccion], client.notes && ["Notas", client.notes], client.vendedorNombre && ["🧑‍💼 Vendedor", client.vendedorNombre + (client.vendedorTelefono ? ` · ${client.vendedorTelefono}` : "")]].filter(Boolean).map(([l,v]) => (
+              <div key={l} style={{ display:"flex", justifyContent:"space-between", gap:8, marginBottom:8 }}>
+                <span style={{ color:"#6b7280", fontSize:13 }}>{l}</span>
+                <span style={{ color:"#e5e7eb", fontSize:13, fontWeight:600, textAlign:"right" }}>{v}</span>
+              </div>
+            ))}
+            {client.direccion && <div style={{ marginTop:8 }}><NavigateButton entity={client}/></div>}
+          </>
+        )}
         {/* Servicios adicionales */}
         {(client.extras||[]).length > 0 && (
           <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #2a2a2a" }}>
@@ -1618,8 +1695,44 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
   const [showAddVehicle, setShowAddVehicle] = useState(false);
   const [vForm, setVForm] = useState({ plate:"", vehicle:"", nroMovil:"", notes:"", tieneTrailer:false, trailerCheck:{} });
   const [saving, setSaving] = useState(false);
-  const [editingVehicle, setEditingVehicle] = useState(null); // vehículo que se está editando
-  const [eForm, setEForm] = useState(null); // formulario de edición
+  const [editingVehicle, setEditingVehicle] = useState(null);
+  const [eForm, setEForm] = useState(null);
+  const [editCompany, setEditCompany] = useState(false);
+  const [compForm, setCompForm] = useState(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+
+  function startEditCompany() {
+    setCompForm({ name: company.name||"", phone: company.phone||"", cuit: company.cuit||"", address: company.address||"", notes: company.notes||"", lat: company.lat||null, lng: company.lng||null });
+    setEditCompany(true);
+  }
+
+  async function saveEditCompany() {
+    setSaving(true);
+    await fbUpdate("companies", company.id, compForm);
+    setSelectedCompany({ ...company, ...compForm });
+    setEditCompany(false);
+    setSaving(false);
+  }
+
+  function detectarUbicacion() {
+    if (!navigator.geolocation) { alert("Tu dispositivo no soporta GPS."); return; }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+          const json = await res.json();
+          setCompForm(f => ({ ...f, address: json.display_name || `${latitude},${longitude}`, lat: latitude, lng: longitude }));
+        } catch {
+          setCompForm(f => ({ ...f, address: `${latitude},${longitude}`, lat: latitude, lng: longitude }));
+        }
+        setGpsLoading(false);
+      },
+      () => { alert("No se pudo obtener la ubicación."); setGpsLoading(false); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
 
   const vehicles = company.vehicles || [];
 
@@ -1676,18 +1789,48 @@ function CompanyDetail({ company, data, setPage, setSelectedCompany, setSelected
       <div style={{ background:"linear-gradient(145deg,#1c1c1c,#141414)", borderRadius:18, padding:20, border:"1px solid rgba(96,165,250,0.2)", marginBottom:16, boxShadow:"0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(96,165,250,0.04)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:16 }}>
           <div style={{ width:56, height:56, borderRadius:16, background:"#60a5fa22", border:"2px solid #60a5fa", display:"flex", alignItems:"center", justifyContent:"center", fontSize:28 }}>🏢</div>
-          <div>
+          <div style={{ flex:1 }}>
             <h2 style={{ color:"#f1f5f9", margin:0, fontSize:20, fontWeight:900 }}>{company.name}</h2>
             <span style={{ color:"#60a5fa", fontSize:12, fontWeight:700 }}>{vehicles.length} vehículos registrados</span>
           </div>
+          <button onClick={startEditCompany} style={{ padding:"7px 14px", borderRadius:10, background:"rgba(96,165,250,0.08)", border:"1px solid rgba(96,165,250,0.25)", color:"#60a5fa", fontWeight:700, fontSize:12, cursor:"pointer" }}>✏️ Editar</button>
         </div>
-        {[company.phone && ["Teléfono", company.phone], company.cuit && ["CUIT", company.cuit], company.address && ["📍 Dirección", company.address], company.notes && ["Notas", company.notes]].filter(Boolean).map(([l,v]) => (
-          <div key={l} style={{ display:"flex", justifyContent:"space-between", gap:8, marginBottom:8 }}>
-            <span style={{ color:"#6b7280", fontSize:13 }}>{l}</span>
-            <span style={{ color:"#e5e7eb", fontSize:13, fontWeight:600, textAlign:"right" }}>{v}</span>
+
+        {editCompany && compForm ? (
+          <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:12 }}>
+            {[["Nombre", "name", "text"], ["Teléfono", "phone", "tel"], ["CUIT", "cuit", "text"]].map(([label, key, type]) => (
+              <div key={key}>
+                <label style={{ color:"#6b7280", fontSize:11, fontWeight:700, textTransform:"uppercase", display:"block", marginBottom:4 }}>{label}</label>
+                <input type={type} value={compForm[key]} onChange={e => setCompForm(f => ({ ...f, [key]: e.target.value }))}
+                  style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"#0f0f0f", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" }}/>
+              </div>
+            ))}
+            <AddressField value={compForm.address} onChange={v => setCompForm(f => ({ ...f, address: v }))} onGps={detectarUbicacion} gpsLoading={gpsLoading} hasCoords={!!(compForm.lat && compForm.lng)}/>
+            <div>
+              <label style={{ color:"#6b7280", fontSize:11, fontWeight:700, textTransform:"uppercase", display:"block", marginBottom:4 }}>Notas</label>
+              <textarea value={compForm.notes} onChange={e => setCompForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+                style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"#0f0f0f", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none", resize:"none" }}/>
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={saveEditCompany} disabled={saving} style={{ flex:1, padding:"12px", borderRadius:12, background:"linear-gradient(135deg,#10b981,#059669)", border:"none", color:"#fff", fontWeight:900, fontSize:14, cursor:"pointer" }}>
+                {saving ? "Guardando..." : "✓ Guardar"}
+              </button>
+              <button onClick={() => setEditCompany(false)} style={{ flex:1, padding:"12px", borderRadius:12, background:"#1a1a1a", border:"1px solid #333", color:"#6b7280", fontWeight:700, fontSize:14, cursor:"pointer" }}>
+                Cancelar
+              </button>
+            </div>
           </div>
-        ))}
-        {(company.address || company.lat) && <div style={{ marginBottom:12 }}><NavigateButton entity={{ direccion: company.address, lat: company.lat, lng: company.lng }}/></div>}
+        ) : (
+          <>
+            {[company.phone && ["Teléfono", company.phone], company.cuit && ["CUIT", company.cuit], company.address && ["📍 Dirección", company.address], company.notes && ["Notas", company.notes]].filter(Boolean).map(([l,v]) => (
+              <div key={l} style={{ display:"flex", justifyContent:"space-between", gap:8, marginBottom:8 }}>
+                <span style={{ color:"#6b7280", fontSize:13 }}>{l}</span>
+                <span style={{ color:"#e5e7eb", fontSize:13, fontWeight:600, textAlign:"right" }}>{v}</span>
+              </div>
+            ))}
+            {(company.address || company.lat) && <div style={{ marginBottom:12 }}><NavigateButton entity={{ direccion: company.address, lat: company.lat, lng: company.lng }}/></div>}
+          </>
+        )}
         <div style={{ display:"flex", gap:8, marginTop:12 }}>
           <div style={{ flex:1, background:"rgba(16,185,129,0.07)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:10, padding:"8px 12px", textAlign:"center" }}>
             <div style={{ color:"#10b981", fontWeight:900, fontSize:18 }}>{vehicles.length}</div>

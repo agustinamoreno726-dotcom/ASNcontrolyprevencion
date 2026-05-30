@@ -1292,9 +1292,14 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
 
   async function addRepair(repData) {
     setSaving(true);
-    const updated = [...repairs, repData];
-    await fbUpdate("clients", client.id, { repairs: updated });
-    setShowRepairForm(false);
+    try {
+      const updated = [...(client.repairs || []), repData];
+      await fbUpdate("clients", client.id, { repairs: updated });
+      setShowRepairForm(false);
+    } catch(err) {
+      console.error("Error guardando reparación:", err);
+      alert("Error al guardar la reparación: " + err.message);
+    }
     setSaving(false);
   }
 
@@ -2488,11 +2493,16 @@ function VehicleDetail({ vehicle, data, setPage }) {
 
   async function addRepair(repData) {
     if (!company) return;
-    const updatedVehicles = (company.vehicles||[]).map(v =>
-      v.id === vehicle.id ? { ...v, repairs: [...(v.repairs||[]), repData] } : v
-    );
-    await fbUpdate("companies", company.id, { vehicles: updatedVehicles });
-    setShowRepairForm(false);
+    try {
+      const updatedVehicles = (company.vehicles||[]).map(v =>
+        v.id === vehicle.id ? { ...v, repairs: [...(v.repairs||[]), repData] } : v
+      );
+      await fbUpdate("companies", company.id, { vehicles: updatedVehicles });
+      setShowRepairForm(false);
+    } catch(err) {
+      console.error("Error guardando reparación:", err);
+      alert("Error al guardar la reparación: " + err.message);
+    }
   }
 
   async function deleteRepair(idx) {
@@ -3201,8 +3211,11 @@ function RepairForm({ onSave, onCancel }) {
         </div>
 
         <div style={{ display:"flex", gap:8 }}>
-          <button onClick={async () => {
+          <button onClick={async (e) => {
             if (!form.descripcion) { alert("Ingresá la descripción."); return; }
+            const btn = e.currentTarget;
+            btn.disabled = true;
+            btn.textContent = photos.length > 0 ? "⏳ Subiendo fotos..." : "⏳ Guardando...";
             // Subir fotos a Firebase Storage
             const uploadedUrls = [];
             if (photos.length > 0) {
@@ -3210,14 +3223,23 @@ function RepairForm({ onSave, onCancel }) {
               const repId = `rep_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
               for (let i = 0; i < photos.length; i++) {
                 try {
-                  const storageRef = ref(storage, `repairs/${repId}/foto_${i}_${Date.now()}.jpg`);
+                  btn.textContent = `⏳ Foto ${i+1} de ${photos.length}...`;
+                  const storageRef = ref(storage, `repairs/${repId}/foto_${i}.jpg`);
                   await uploadBytes(storageRef, photos[i].file);
                   const url = await getDownloadURL(storageRef);
                   uploadedUrls.push(url);
-                } catch(err) { console.error("Error subiendo foto:", err); }
+                } catch(err) {
+                  console.error("Error subiendo foto:", err);
+                  alert(`Error al subir foto ${i+1}. Verificá la conexión e intentá de nuevo.`);
+                  btn.disabled = false; btn.textContent = "✓ Guardar"; return;
+                }
               }
             }
-            onSave({ ...form, costo: Number(form.costo)||0, createdAt: new Date(form.fecha).getTime() || Date.now(), photos: uploadedUrls });
+            // Parsear fecha correctamente (evitar timezone UTC)
+            const [yy, mm, dd] = form.fecha.split("-").map(Number);
+            const fechaTs = new Date(yy, mm-1, dd).getTime() || Date.now();
+            await onSave({ ...form, costo: Number(form.costo)||0, createdAt: fechaTs, photos: uploadedUrls });
+            btn.disabled = false; btn.textContent = "✓ Guardar";
           }}
             style={{ flex:1, padding:"11px", background:"linear-gradient(135deg,#7c3aed,#6d28d9)", border:"none", color:"#fff", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:14 }}>
             ✓ Guardar
@@ -3525,6 +3547,8 @@ function Checks({ data, setPage, preselectedClientId }) {
   const [detalle, setDetalle] = useState("");
   const [recomendaciones, setRecomendaciones] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savingMsg, setSavingMsg] = useState("");
   const [activeItem, setActiveItem] = useState(null);
   const [milestoneStats, setMilestoneStats] = useState(null);
   const [photoModal, setPhotoModal] = useState(null); // { itemId, url } for full-screen view
@@ -3567,6 +3591,10 @@ function Checks({ data, setPage, preselectedClientId }) {
   async function handleSave() {
     if (mode === "client" && !clientId) { alert("Seleccioná un cliente."); return; }
     if (mode === "company" && (!companyId || !vehicleId)) { alert("Seleccioná empresa y vehículo."); return; }
+    if (saving) return;
+
+    setSaving(true);
+    setSavingMsg("Preparando...");
 
     // Determinar si hay trailer
     let selectedEntityForSave = null;
@@ -3581,21 +3609,30 @@ function Checks({ data, setPage, preselectedClientId }) {
     const uploadedPhotos = {};
     const checkId = `check_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     const { storage, ref, uploadBytes, getDownloadURL } = window._firebase;
+    const totalFotos = Object.values(itemPhotos).reduce((acc, arr) => acc + (arr||[]).length, 0);
+    let fotoN = 0;
     for (const [itemId, photos] of Object.entries(itemPhotos)) {
       if (!photos || photos.length === 0) continue;
       uploadedPhotos[itemId] = [];
       for (let i = 0; i < photos.length; i++) {
         const p = photos[i];
         if (!p.file) continue;
+        fotoN++;
+        setSavingMsg(`Subiendo foto ${fotoN} de ${totalFotos}...`);
         try {
-          const storageRef = ref(storage, `checks/${checkId}/${itemId}_${i}_${Date.now()}.jpg`);
+          const storageRef = ref(storage, `checks/${checkId}/${itemId}_${i}.jpg`);
           await uploadBytes(storageRef, p.file);
           const url = await getDownloadURL(storageRef);
           uploadedPhotos[itemId].push(url);
-        } catch(err) { console.error("Error subiendo foto:", err); }
+        } catch(err) {
+          console.error("Error subiendo foto:", err);
+          alert(`Error al subir foto ${fotoN}. Verificá la conexión e intentá de nuevo.`);
+          setSaving(false); setSavingMsg(""); return;
+        }
       }
     }
 
+    setSavingMsg("Guardando chequeo...");
     const check = {
       clientId: mode === "client" ? clientId : null,
       vehicleId: mode === "company" ? vehicleId : null,
@@ -3606,7 +3643,14 @@ function Checks({ data, setPage, preselectedClientId }) {
       itemPhotos: uploadedPhotos,
       createdAt: Date.now()
     };
-    await fbAdd("checks", check);
+    try {
+      await fbAdd("checks", check);
+    } catch(err) {
+      console.error("Error guardando chequeo:", err);
+      alert("Error al guardar el chequeo. Verificá la conexión.");
+      setSaving(false); setSavingMsg(""); return;
+    }
+    setSaving(false); setSavingMsg("");
     setSaved(true);
     setItemStates(buildInitialItems()); setTrailerItemStates({}); setItemPhotos({});
     setClientId(""); setCompanyId(""); setVehicleId(""); setPerito(""); setKms(""); setNroMovil(""); setDetalle(""); setRecomendaciones("");
@@ -3837,8 +3881,8 @@ function Checks({ data, setPage, preselectedClientId }) {
         <textarea value={recomendaciones} onChange={e => setRecomendaciones(e.target.value)} placeholder="Ej: Alineado y balanceado, revisión de frenos..." rows={3} style={TXA}/>
       </div>
 
-      <button onClick={handleSave} style={{ width:"100%", padding:"16px", background:"linear-gradient(135deg,#f97316,#ea580c)", border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:16 }}>
-        Guardar Chequeo
+      <button onClick={handleSave} disabled={saving} style={{ width:"100%", padding:"16px", background: saving ? "#1a1a1a" : "linear-gradient(135deg,#f97316,#ea580c)", border: saving ? "1px solid #333" : "none", color: saving ? "#6b7280" : "#fff", borderRadius:14, cursor: saving ? "default" : "pointer", fontWeight:900, fontSize:16 }}>
+        {saving ? savingMsg || "Guardando..." : "Guardar Chequeo"}
       </button>
     </div>
   );

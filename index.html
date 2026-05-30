@@ -816,7 +816,20 @@ function generarInformeWpp(entity, ch, isCompanyVehicle = false) {
   return msg;
 }
 
-function exportarPDF(entity, ch, isCompanyVehicle = false) {
+async function imgUrlToBase64(url) {
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    return await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(blob);
+    });
+  } catch(e) { return null; }
+}
+
+async function exportarPDF(entity, ch, isCompanyVehicle = false) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
@@ -976,13 +989,109 @@ function exportarPDF(entity, ch, isCompanyVehicle = false) {
     y += lines.length*4+14;
   }
 
-  // ── FOOTER ──
+  // ── ANEXO FOTOGRÁFICO ──
+  const itemPhotos = ch.itemPhotos || {};
+  const allItemsFlat = CHECK_SECTIONS.flatMap(s => s.items);
+  // Recopilar ítems con fotos, priorizando críticos
+  const itemsConFotos = allItemsFlat
+    .filter(item => (itemPhotos[item.id]||[]).length > 0)
+    .map(item => ({ item, estado: (ch.itemStates||{})[item.id], urls: itemPhotos[item.id] }))
+    .sort((a,b) => {
+      const order = { critico:0, prevencion:1, solicitar:2, ok:3 };
+      return (order[a.estado]??9) - (order[b.estado]??9);
+    });
+
+  if (itemsConFotos.length > 0) {
+    doc.addPage();
+    let ay = 14;
+    const estadoColors2 = { ok:[16,185,129], critico:[239,68,68], prevencion:[245,158,11], solicitar:[96,165,250] };
+
+    // Título anexo
+    doc.setDrawColor(249,115,22); doc.setLineWidth(0.8);
+    doc.line(M, ay+10, W-M, ay+10);
+    doc.setFontSize(14); doc.setFont("helvetica","bold"); doc.setTextColor(249,115,22);
+    doc.text("ASN", M, ay+7);
+    doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+    doc.text("Anexo Fotográfico — Ítems con Observaciones", M+16, ay+7);
+    ay += 18;
+
+    const IMG_W = 55, IMG_H = 42, COLS = 3, GAP = 4;
+    let col = 0;
+    let rowY = ay;
+
+    for (const { item, estado, urls } of itemsConFotos) {
+      const col_ = estadoColors2[estado] || [107,114,128];
+      const est = ESTADOS.find(e => e.id === estado);
+
+      for (const url of urls) {
+        // Nueva página si se acaba el espacio
+        if (rowY + IMG_H + 18 > doc.internal.pageSize.getHeight() - 16) {
+          // footer en página actual
+          const ph = doc.internal.pageSize.getHeight();
+          doc.setDrawColor(249,115,22); doc.setLineWidth(0.5);
+          doc.line(M, ph-12, W-M, ph-12);
+          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+          doc.text("ASN · Control y Prevencion Vehicular", M, ph-7);
+          doc.text("Generado: " + new Date().toLocaleDateString("es-AR"), W-M, ph-7, { align:"right" });
+          doc.addPage();
+          col = 0; rowY = 14;
+        }
+
+        const cx = M + col * (IMG_W + GAP);
+
+        // Cargar imagen
+        const b64 = await imgUrlToBase64(url);
+        if (b64) {
+          try {
+            // Marco coloreado según estado
+            doc.setDrawColor(...col_); doc.setLineWidth(0.6);
+            doc.roundedRect(cx-0.5, rowY-0.5, IMG_W+1, IMG_H+1, 2, 2, "S");
+            doc.addImage(b64, "JPEG", cx, rowY, IMG_W, IMG_H, undefined, "FAST");
+          } catch(e) {
+            // Si falla la imagen, poner placeholder
+            doc.setFillColor(243,244,246); doc.roundedRect(cx, rowY, IMG_W, IMG_H, 2, 2, "F");
+            doc.setFontSize(7); doc.setTextColor(156,163,175);
+            doc.text("Imagen no disponible", cx+IMG_W/2, rowY+IMG_H/2, { align:"center" });
+          }
+        }
+
+        // Etiqueta ítem
+        doc.setFontSize(6.5); doc.setFont("helvetica","bold"); doc.setTextColor(...col_);
+        doc.text(est ? est.label : "", cx, rowY+IMG_H+4);
+        const labelLines = doc.splitTextToSize(item.label, IMG_W);
+        doc.setFont("helvetica","normal"); doc.setTextColor(55,65,81);
+        doc.text(labelLines[0] || item.label, cx, rowY+IMG_H+8);
+
+        col++;
+        if (col >= COLS) { col = 0; rowY += IMG_H + 16; }
+      }
+    }
+
+    if (col > 0) rowY += IMG_H + 16;
+
+    // Footer última página del anexo
+    const ph = doc.internal.pageSize.getHeight();
+    doc.setDrawColor(249,115,22); doc.setLineWidth(0.5);
+    doc.line(M, ph-12, W-M, ph-12);
+    doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+    doc.text("ASN · Control y Prevencion Vehicular", M, ph-7);
+    doc.text("Generado: " + new Date().toLocaleDateString("es-AR"), W-M, ph-7, { align:"right" });
+  }
+
+  // ── FOOTER página principal ──
   const pageH = doc.internal.pageSize.getHeight();
-  doc.setDrawColor(249,115,22); doc.setLineWidth(0.5);
-  doc.line(M, pageH-12, W-M, pageH-12);
-  doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
-  doc.text("ASN \xB7 Control y Prevencion Vehicular", M, pageH-7);
-  doc.text("Generado: " + new Date().toLocaleDateString("es-AR"), W-M, pageH-7, { align:"right" });
+  // (ya se agrega en la lógica de páginas del anexo si hay fotos, aquí protegemos si no hay)
+  // Recorrer todas las páginas y agregar footer si no lo tienen
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    const ph2 = doc.internal.pageSize.getHeight();
+    doc.setDrawColor(249,115,22); doc.setLineWidth(0.5);
+    doc.line(M, ph2-12, W-M, ph2-12);
+    doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+    doc.text("ASN · Control y Prevencion Vehicular", M, ph2-7);
+    doc.text("Generado: " + new Date().toLocaleDateString("es-AR"), W-M, ph2-7, { align:"right" });
+  }
 
   // ── DESCARGAR ──
   const nombre = (isCompanyVehicle
@@ -1045,13 +1154,28 @@ function CheckDetailModal({ ch, entity, isCompanyVehicle, onClose }) {
               <div style={{ color:"#e5e7eb", fontWeight:700, fontSize:13, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:10 }}>{sec.icon} {sec.title}</div>
               {items.map(item => {
                 const est = ESTADOS.find(e => e.id === item.estadoId);
+                const photos = (ch.itemPhotos || {})[item.id] || [];
                 return (
-                  <div key={item.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", borderBottom:"1px solid #232323" }}>
-                    <span style={{ color: est ? "#e5e7eb" : "#4b5563", fontSize:13 }}>{item.label}</span>
-                    {est
-                      ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}44`, whiteSpace:"nowrap" }}>{est.label}</span>
-                      : <span style={{ color:"#3a3a3a", fontSize:11 }}>—</span>
-                    }
+                  <div key={item.id} style={{ borderBottom:"1px solid #232323" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0" }}>
+                      <span style={{ color: est ? "#e5e7eb" : "#4b5563", fontSize:13, flex:1, marginRight:8 }}>{item.label}</span>
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        {photos.length > 0 && <span style={{ fontSize:10, background:"#3b82f622", border:"1px solid #3b82f644", color:"#60a5fa", borderRadius:20, padding:"2px 7px", fontWeight:700 }}>📷 {photos.length}</span>}
+                        {est
+                          ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}44`, whiteSpace:"nowrap" }}>{est.label}</span>
+                          : <span style={{ color:"#3a3a3a", fontSize:11 }}>—</span>
+                        }
+                      </div>
+                    </div>
+                    {photos.length > 0 && (
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap", paddingBottom:10 }}>
+                        {photos.map((url, pidx) => (
+                          <a key={pidx} href={url} target="_blank" rel="noopener noreferrer" title="Ver foto completa">
+                            <img src={url} style={{ width:64, height:64, objectFit:"cover", borderRadius:8, border:`2px solid ${est?.id === "critico" ? "#ef444466" : "#3b82f666"}`, cursor:"pointer" }} alt={`Foto ${pidx+1}`}/>
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1078,6 +1202,29 @@ function CheckDetailModal({ ch, entity, isCompanyVehicle, onClose }) {
             })}
           </div>
         )}
+
+        {/* Resumen fotos críticas */}
+        {(() => {
+          const allItemsFlat = CHECK_SECTIONS.flatMap(s => s.items);
+          const criticos = allItemsFlat.filter(i => (ch.itemStates||{})[i.id] === "critico");
+          const fotasCriticas = criticos.flatMap(i => ((ch.itemPhotos||{})[i.id]||[]).map(url => ({ url, label: i.label })));
+          if (fotasCriticas.length === 0) return null;
+          return (
+            <div style={{ background:"rgba(239,68,68,0.06)", borderRadius:14, padding:14, marginBottom:10, border:"1px solid rgba(239,68,68,0.25)" }}>
+              <div style={{ color:"#ef4444", fontWeight:700, fontSize:13, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:10 }}>📷 Fotos de ítems críticos ({fotasCriticas.length})</div>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                {fotasCriticas.map((f, idx) => (
+                  <div key={idx} style={{ textAlign:"center" }}>
+                    <a href={f.url} target="_blank" rel="noopener noreferrer">
+                      <img src={f.url} style={{ width:80, height:80, objectFit:"cover", borderRadius:10, border:"2px solid #ef444466", cursor:"pointer", display:"block" }} alt={f.label}/>
+                    </a>
+                    <div style={{ color:"#ef4444", fontSize:9, marginTop:4, maxWidth:80, textOverflow:"ellipsis", overflow:"hidden", whiteSpace:"nowrap" }}>{f.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Notas */}
         {(ch.recomendaciones || ch.detalle) && (
@@ -1360,7 +1507,7 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
                     <button onClick={() => enviarWpp(ch)} style={{ flex:1, padding:"10px 8px", borderRadius:10, background:"linear-gradient(135deg,#22c55e,#15803d)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:5, letterSpacing:"0.04em" }}>
                       💬 WhatsApp
                     </button>
-                    <button onClick={() => exportarPDF(client, ch, false)} style={{ flex:1, padding:"10px 8px", borderRadius:10, background:"linear-gradient(135deg,#ef4444,#991b1b)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:5, letterSpacing:"0.04em" }}>
+                    <button onClick={async (e) => { const btn=e.currentTarget; btn.disabled=true; btn.textContent="⏳ Generando..."; try { await exportarPDF(client, ch, false); } finally { btn.disabled=false; btn.innerHTML="📄 PDF"; } }} style={{ flex:1, padding:"10px 8px", borderRadius:10, background:"linear-gradient(135deg,#ef4444,#991b1b)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:5, letterSpacing:"0.04em" }}>
                       📄 PDF
                     </button>
                     <button onClick={() => copiarInforme(ch)} style={{ padding:"10px 12px", borderRadius:10, background:"#161616", border:"1px solid #252525", color:"#4b5563", fontWeight:700, fontSize:13, cursor:"pointer" }}>
@@ -2472,7 +2619,7 @@ function VehicleDetail({ vehicle, data, setPage }) {
                     <button onClick={() => enviarWpp(ch)} style={{ flex:1, padding:"10px 8px", borderRadius:12, background:"linear-gradient(135deg,#22c55e,#16a34a)", border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>
                       💬 WhatsApp
                     </button>
-                    <button onClick={() => exportarPDF(vehicle, ch, true)} style={{ flex:1, padding:"10px 8px", borderRadius:12, background:"linear-gradient(135deg,#ef4444,#b91c1c)", border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                    <button onClick={async (e) => { const btn=e.currentTarget; btn.disabled=true; btn.textContent="⏳ Generando..."; try { await exportarPDF(vehicle, ch, true); } finally { btn.disabled=false; btn.innerHTML="📄 PDF"; } }} style={{ flex:1, padding:"10px 8px", borderRadius:12, background:"linear-gradient(135deg,#ef4444,#b91c1c)", border:"none", color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer" }}>
                       📄 PDF
                     </button>
                     <button onClick={() => copiarInforme(ch)} style={{ padding:"10px 12px", borderRadius:10, background:"#161616", border:"1px solid #252525", color:"#4b5563", fontWeight:700, fontSize:13, cursor:"pointer" }}>
@@ -3126,27 +3273,40 @@ function Checks({ data, setPage, preselectedClientId }) {
   const [nroMovil, setNroMovil] = useState("");
   const [itemStates, setItemStates] = useState(buildInitialItems);
   const [trailerItemStates, setTrailerItemStates] = useState({});
+  const [itemPhotos, setItemPhotos] = useState({}); // { [itemId]: [{ dataUrl, file }] }
   const [detalle, setDetalle] = useState("");
   const [recomendaciones, setRecomendaciones] = useState("");
   const [saved, setSaved] = useState(false);
   const [activeItem, setActiveItem] = useState(null);
   const [milestoneStats, setMilestoneStats] = useState(null);
+  const [photoModal, setPhotoModal] = useState(null); // { itemId, url } for full-screen view
   const prevDoneRef = useRef(0);
+
+  function handlePhotoCapture(itemId, files) {
+    if (!files || files.length === 0) return;
+    const newPhotos = Array.from(files).map(file => ({
+      file,
+      dataUrl: URL.createObjectURL(file),
+    }));
+    setItemPhotos(prev => ({
+      ...prev,
+      [itemId]: [...(prev[itemId] || []), ...newPhotos],
+    }));
+  }
+
+  function removePhoto(itemId, idx) {
+    setItemPhotos(prev => {
+      const updated = [...(prev[itemId] || [])];
+      updated.splice(idx, 1);
+      return { ...prev, [itemId]: updated };
+    });
+  }
 
   function setEstado(itemId, estadoId) {
     setItemStates(p => {
       const next = { ...p, [itemId]: estadoId };
       const allItems = CHECK_SECTIONS.flatMap(s => s.items);
       const done = allItems.filter(i => next[i.id] !== null).length;
-      const prevDone = prevDoneRef.current;
-      if (done > 0 && Math.floor(done / 3) > Math.floor(prevDone / 3)) {
-        const ok = allItems.filter(i => next[i.id] === "ok").length;
-        const critico = allItems.filter(i => next[i.id] === "critico").length;
-        const prevencion = allItems.filter(i => next[i.id] === "prevencion").length;
-        const solicitar = allItems.filter(i => next[i.id] === "solicitar").length;
-        const pct = Math.round((ok / done) * 100);
-        setMilestoneStats({ done, total: allItems.length, ok, critico, prevencion, solicitar, pct });
-      }
       prevDoneRef.current = done;
       return next;
     });
@@ -3169,6 +3329,25 @@ function Checks({ data, setPage, preselectedClientId }) {
     }
     const tieneTrailer = selectedEntityForSave?.tieneTrailer || false;
 
+    // Subir fotos a Firebase Storage
+    const uploadedPhotos = {};
+    const checkId = `check_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    const { storage, ref, uploadBytes, getDownloadURL } = window._firebase;
+    for (const [itemId, photos] of Object.entries(itemPhotos)) {
+      if (!photos || photos.length === 0) continue;
+      uploadedPhotos[itemId] = [];
+      for (let i = 0; i < photos.length; i++) {
+        const p = photos[i];
+        if (!p.file) continue;
+        try {
+          const storageRef = ref(storage, `checks/${checkId}/${itemId}_${i}_${Date.now()}.jpg`);
+          await uploadBytes(storageRef, p.file);
+          const url = await getDownloadURL(storageRef);
+          uploadedPhotos[itemId].push(url);
+        } catch(err) { console.error("Error subiendo foto:", err); }
+      }
+    }
+
     const check = {
       clientId: mode === "client" ? clientId : null,
       vehicleId: mode === "company" ? vehicleId : null,
@@ -3176,11 +3355,13 @@ function Checks({ data, setPage, preselectedClientId }) {
       perito, kms, nroMovil, itemStates, detalle, recomendaciones,
       trailerIncluido: tieneTrailer,
       trailerItemStates: tieneTrailer ? trailerItemStates : {},
+      itemPhotos: uploadedPhotos,
       createdAt: Date.now()
     };
     await fbAdd("checks", check);
     setSaved(true);
-    setItemStates(buildInitialItems()); setTrailerItemStates({}); setClientId(""); setCompanyId(""); setVehicleId(""); setPerito(""); setKms(""); setNroMovil(""); setDetalle(""); setRecomendaciones("");
+    setItemStates(buildInitialItems()); setTrailerItemStates({}); setItemPhotos({});
+    setClientId(""); setCompanyId(""); setVehicleId(""); setPerito(""); setKms(""); setNroMovil(""); setDetalle(""); setRecomendaciones("");
     setTimeout(() => setSaved(false), 2000);
   }
 
@@ -3206,60 +3387,6 @@ function Checks({ data, setPage, preselectedClientId }) {
 
   return (
     <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
-      {/* Milestone stats modal */}
-      {milestoneStats && (
-        <div style={{ position:"fixed", inset:0, zIndex:200, background:"#000000cc", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}
-          onClick={() => setMilestoneStats(null)}>
-          <div style={{ background:"#1a1a1a", borderRadius:24, padding:24, border:"1px solid #f9731644", width:"100%", maxWidth:340 }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ textAlign:"center", marginBottom:16 }}>
-              <div style={{ fontSize:36, marginBottom:6 }}>📊</div>
-              <div style={{ color:"#f97316", fontWeight:900, fontSize:16 }}>Estado parcial del vehículo</div>
-              <div style={{ color:"#6b7280", fontSize:12, marginTop:4 }}>{milestoneStats.done} de {milestoneStats.total} ítems relevados</div>
-            </div>
-            {/* Barra de salud */}
-            <div style={{ background:"#111", borderRadius:12, height:10, overflow:"hidden", marginBottom:16 }}>
-              <div style={{ width:`${milestoneStats.pct}%`, height:"100%", borderRadius:12,
-                background: milestoneStats.critico > 0 ? "#ef4444" : milestoneStats.pct >= 80 ? "#10b981" : "#f59e0b",
-                transition:"width 0.4s" }}/>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
-              <div style={{ background:"rgba(16,185,129,0.07)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:12, padding:"10px", textAlign:"center" }}>
-                <div style={{ color:"#10b981", fontWeight:900, fontSize:22 }}>{milestoneStats.ok}</div>
-                <div style={{ color:"#6b7280", fontSize:11 }}>OK ✓</div>
-              </div>
-              <div style={{ background:"rgba(239,68,68,0.07)", border:"1px solid rgba(239,68,68,0.2)", borderRadius:12, padding:"10px", textAlign:"center" }}>
-                <div style={{ color:"#ef4444", fontWeight:900, fontSize:22 }}>{milestoneStats.critico}</div>
-                <div style={{ color:"#6b7280", fontSize:11 }}>Crítico ⚠️</div>
-              </div>
-              <div style={{ background:"rgba(245,158,11,0.07)", border:"1px solid rgba(245,158,11,0.2)", borderRadius:12, padding:"10px", textAlign:"center" }}>
-                <div style={{ color:"#f59e0b", fontWeight:900, fontSize:22 }}>{milestoneStats.prevencion}</div>
-                <div style={{ color:"#6b7280", fontSize:11 }}>Prevención</div>
-              </div>
-              <div style={{ background:"rgba(96,165,250,0.07)", border:"1px solid rgba(96,165,250,0.2)", borderRadius:12, padding:"10px", textAlign:"center" }}>
-                <div style={{ color:"#60a5fa", fontWeight:900, fontSize:22 }}>{milestoneStats.solicitar}</div>
-                <div style={{ color:"#6b7280", fontSize:11 }}>A Solicitar</div>
-              </div>
-            </div>
-            <div style={{ background: milestoneStats.critico > 0 ? "#ef444422" : milestoneStats.pct >= 80 ? "#10b98122" : "#f59e0b22",
-              border:`1px solid ${milestoneStats.critico > 0 ? "#ef444444" : milestoneStats.pct >= 80 ? "#10b98144" : "#f59e0b44"}`,
-              borderRadius:12, padding:"10px 14px", textAlign:"center", marginBottom:16,
-              color: milestoneStats.critico > 0 ? "#ef4444" : milestoneStats.pct >= 80 ? "#10b981" : "#f59e0b",
-              fontWeight:700, fontSize:13 }}>
-              {milestoneStats.critico > 0
-                ? `⛔ Hay ${milestoneStats.critico} ítem${milestoneStats.critico > 1 ? "s" : ""} crítico${milestoneStats.critico > 1 ? "s" : ""} — requiere atención`
-                : milestoneStats.pct >= 80
-                  ? "✅ El vehículo marcha bien hasta acá"
-                  : "🟡 Algunos ítems requieren atención"}
-            </div>
-            <button onClick={() => setMilestoneStats(null)}
-              style={{ width:"100%", padding:"12px", background:"linear-gradient(135deg,#f97316,#ea580c)", border:"none", color:"#fff", borderRadius:12, cursor:"pointer", fontWeight:900, fontSize:15 }}>
-              Continuar chequeo →
-            </button>
-          </div>
-        </div>
-      )}
-
       <button onClick={() => preselectedClientId ? setPage("client-detail") : setPage("dashboard")} style={{ background:"none", border:"none", color:"#c2400c", cursor:"pointer", fontSize:13, fontWeight:700, marginBottom:16, padding:"6px 0", letterSpacing:"0.04em" }}>← Volver</button>
       <h2 style={{ color:"#f97316", margin:"0 0 4px", fontSize:22, fontWeight:900 }}>Nuevo Chequeo</h2>
       <p style={{ color:"#6b7280", fontSize:13, margin:"0 0 20px" }}>Planilla ASN de Control Vehicular</p>
@@ -3336,6 +3463,17 @@ function Checks({ data, setPage, preselectedClientId }) {
         </div>
       </div>
 
+      {/* Modal de foto a pantalla completa */}
+      {photoModal && (
+        <div onClick={() => setPhotoModal(null)} style={{ position:"fixed", inset:0, zIndex:300, background:"#000000ee", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ position:"relative", maxWidth:"100%", maxHeight:"100%" }}>
+            <img src={photoModal.url} style={{ maxWidth:"100%", maxHeight:"80vh", borderRadius:12, objectFit:"contain" }} alt="Foto ítem"/>
+            <div style={{ color:"#9ca3af", fontSize:12, textAlign:"center", marginTop:8 }}>{photoModal.label}</div>
+            <button onClick={() => setPhotoModal(null)} style={{ position:"absolute", top:-12, right:-12, width:32, height:32, borderRadius:"50%", background:"#ef4444", border:"none", color:"#fff", fontWeight:900, fontSize:16, cursor:"pointer" }}>✕</button>
+          </div>
+        </div>
+      )}
+
       {/* Secciones de chequeo */}
       {CHECK_SECTIONS.map(sec => (
         <div key={sec.id} style={{ background:"#1a1a1a", borderRadius:16, padding:16, marginBottom:12, border:"1px solid #2a2a2a" }}>
@@ -3344,22 +3482,59 @@ function Checks({ data, setPage, preselectedClientId }) {
             const estado = itemStates[item.id];
             const est = ESTADOS.find(e => e.id === estado);
             const isOpen = activeItem === item.id;
+            const photos = itemPhotos[item.id] || [];
+            const isCritico = estado === "critico";
+            const hasPhotos = photos.length > 0;
             return (
               <div key={item.id}>
                 <div onClick={() => setActiveItem(isOpen ? null : item.id)}
-                  style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 4px", cursor:"pointer", borderBottom: idx < sec.items.length - 1 || isOpen ? "1px solid #232323" : "none" }}>
+                  style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 4px", cursor:"pointer", borderBottom: (idx < sec.items.length - 1 || isOpen || hasPhotos) ? "1px solid #232323" : "none" }}>
                   <span style={{ flex:1, color: estado ? "#e5e7eb" : "#9ca3af", fontSize:14 }}>{item.label}</span>
+                  {hasPhotos && <span style={{ fontSize:10, background:"#3b82f622", border:"1px solid #3b82f644", color:"#60a5fa", borderRadius:20, padding:"2px 7px", fontWeight:700 }}>📷 {photos.length}</span>}
                   {est
                     ? <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}55`, whiteSpace:"nowrap" }}>{est.label}</span>
                     : <span style={{ color:"#3a3a3a", fontSize:11 }}>— tocar —</span>
                   }
                 </div>
                 {isOpen && (
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:6, padding:"8px 0 12px", borderBottom:"1px solid #232323" }}>
-                    {ESTADOS.map(e => (
-                      <button key={e.id} onClick={() => setEstado(item.id, e.id)} style={{ padding:"6px 14px", borderRadius:20, border:`2px solid ${e.color}`, background: estado===e.id ? e.bg : "transparent", color:e.color, fontWeight:700, fontSize:12, cursor:"pointer" }}>{e.label}</button>
-                    ))}
-                    {estado && <button onClick={() => { setItemStates(p => ({ ...p, [item.id]: null })); setActiveItem(null); }} style={{ padding:"6px 14px", borderRadius:20, border:"2px solid #374151", background:"transparent", color:"#6b7280", fontWeight:700, fontSize:12, cursor:"pointer" }}>Limpiar</button>}
+                  <div style={{ padding:"8px 0 12px", borderBottom:"1px solid #232323" }}>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom: estado ? 10 : 0 }}>
+                      {ESTADOS.map(e => (
+                        <button key={e.id} onClick={() => setEstado(item.id, e.id)} style={{ padding:"6px 14px", borderRadius:20, border:`2px solid ${e.color}`, background: estado===e.id ? e.bg : "transparent", color:e.color, fontWeight:700, fontSize:12, cursor:"pointer" }}>{e.label}</button>
+                      ))}
+                      {estado && <button onClick={() => { setItemStates(p => ({ ...p, [item.id]: null })); setActiveItem(null); }} style={{ padding:"6px 14px", borderRadius:20, border:"2px solid #374151", background:"transparent", color:"#6b7280", fontWeight:700, fontSize:12, cursor:"pointer" }}>Limpiar</button>}
+                    </div>
+                    {/* Sección de fotos — siempre visible si el ítem tiene estado */}
+                    {estado && (
+                      <div style={{ marginTop:10, background:"#111", borderRadius:12, padding:"10px 12px", border:`1px solid ${isCritico ? "#ef444433" : "#2a2a2a"}` }}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                          <span style={{ color: isCritico ? "#ef4444" : "#9ca3af", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                            {isCritico ? "⚠️ Foto requerida — ítem crítico" : "📷 Fotos del ítem"}
+                          </span>
+                          <label style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:20, background: isCritico ? "linear-gradient(135deg,#ef4444,#dc2626)" : "linear-gradient(135deg,#3b82f6,#2563eb)", border:"none", color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                            📷 Agregar foto
+                            <input type="file" accept="image/*" capture="environment" multiple onChange={e => { handlePhotoCapture(item.id, e.target.files); e.target.value=""; }} style={{ display:"none" }}/>
+                          </label>
+                        </div>
+                        {photos.length === 0 ? (
+                          <div style={{ color:"#4b5563", fontSize:12, fontStyle:"italic", textAlign:"center", padding:"8px 0" }}>
+                            {isCritico ? "Sin fotos aún — se recomienda documentar" : "Sin fotos adjuntas"}
+                          </div>
+                        ) : (
+                          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                            {photos.map((p, pidx) => (
+                              <div key={pidx} style={{ position:"relative" }}>
+                                <img src={p.dataUrl || p} onClick={() => setPhotoModal({ url: p.dataUrl || p, label: item.label })}
+                                  style={{ width:72, height:72, objectFit:"cover", borderRadius:10, border:`2px solid ${isCritico ? "#ef444466" : "#3b82f666"}`, cursor:"pointer" }}
+                                  alt={`Foto ${pidx+1}`}/>
+                                <button onClick={() => removePhoto(item.id, pidx)}
+                                  style={{ position:"absolute", top:-6, right:-6, width:20, height:20, borderRadius:"50%", background:"#ef4444", border:"none", color:"#fff", fontWeight:900, fontSize:10, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>✕</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

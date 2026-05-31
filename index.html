@@ -3136,7 +3136,46 @@ function RepairForm({ onSave, onCancel }) {
   const [form, setForm] = useState({ descripcion:"", categoria:"otro", costo:"", taller:"", fecha: new Date().toISOString().slice(0,10), notas:"", estado:"pendiente" });
   const [photos, setPhotos] = useState([]); // [{ file, dataUrl }]
   const [photoModal, setPhotoModal] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  const [guardandoMsg, setGuardandoMsg] = useState("Guardando...");
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  async function handleGuardar() {
+    if (!form.descripcion) { alert("Ingresá la descripción."); return; }
+    if (guardando) return;
+    setGuardando(true);
+
+    const uploadedUrls = [];
+    if (photos.length > 0) {
+      const { storage, ref, uploadBytes, getDownloadURL } = window._firebase;
+      const repId = `rep_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+      for (let i = 0; i < photos.length; i++) {
+        setGuardandoMsg(`⏳ Foto ${i+1} de ${photos.length}...`);
+        try {
+          const storageRef = ref(storage, `repairs/${repId}/foto_${i}.jpg`);
+          await uploadBytes(storageRef, photos[i].file);
+          const url = await getDownloadURL(storageRef);
+          uploadedUrls.push(url);
+        } catch(err) {
+          console.error("Error subiendo foto:", err);
+          alert("Error al subir la foto. Verificá tu conexión e intentá de nuevo.\n\nDetalle: " + (err.message || err));
+          setGuardando(false);
+          return;
+        }
+      }
+    }
+
+    setGuardandoMsg("Guardando...");
+    const [yy, mm, dd] = form.fecha.split("-").map(Number);
+    const fechaTs = new Date(yy, mm-1, dd).getTime() || Date.now();
+    try {
+      await onSave({ ...form, costo: Number(form.costo)||0, createdAt: fechaTs, photos: uploadedUrls });
+    } catch(err) {
+      console.error("Error guardando:", err);
+      alert("Error al guardar la reparación: " + (err.message || err));
+      setGuardando(false);
+    }
+  }
   const INP2 = { width:"100%", padding:"10px 14px", borderRadius:10, background:"#111", border:"1px solid #333", color:"#e5e7eb", fontSize:14, outline:"none" };
 
   function handlePhotos(files) {
@@ -3211,38 +3250,10 @@ function RepairForm({ onSave, onCancel }) {
         </div>
 
         <div style={{ display:"flex", gap:8 }}>
-          <button onClick={async (e) => {
-            if (!form.descripcion) { alert("Ingresá la descripción."); return; }
-            const btn = e.currentTarget;
-            btn.disabled = true;
-            btn.textContent = photos.length > 0 ? "⏳ Subiendo fotos..." : "⏳ Guardando...";
-            // Subir fotos a Firebase Storage
-            const uploadedUrls = [];
-            if (photos.length > 0) {
-              const { storage, ref, uploadBytes, getDownloadURL } = window._firebase;
-              const repId = `rep_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-              for (let i = 0; i < photos.length; i++) {
-                try {
-                  btn.textContent = `⏳ Foto ${i+1} de ${photos.length}...`;
-                  const storageRef = ref(storage, `repairs/${repId}/foto_${i}.jpg`);
-                  await uploadBytes(storageRef, photos[i].file);
-                  const url = await getDownloadURL(storageRef);
-                  uploadedUrls.push(url);
-                } catch(err) {
-                  console.error("Error subiendo foto:", err);
-                  alert(`Error al subir foto ${i+1}. Verificá la conexión e intentá de nuevo.`);
-                  btn.disabled = false; btn.textContent = "✓ Guardar"; return;
-                }
-              }
-            }
-            // Parsear fecha correctamente (evitar timezone UTC)
-            const [yy, mm, dd] = form.fecha.split("-").map(Number);
-            const fechaTs = new Date(yy, mm-1, dd).getTime() || Date.now();
-            await onSave({ ...form, costo: Number(form.costo)||0, createdAt: fechaTs, photos: uploadedUrls });
-            btn.disabled = false; btn.textContent = "✓ Guardar";
-          }}
-            style={{ flex:1, padding:"11px", background:"linear-gradient(135deg,#7c3aed,#6d28d9)", border:"none", color:"#fff", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:14 }}>
-            ✓ Guardar
+          <button onClick={() => handleGuardar()}
+            disabled={guardando}
+            style={{ flex:1, padding:"11px", background: guardando ? "#333" : "linear-gradient(135deg,#7c3aed,#6d28d9)", border:"none", color: guardando ? "#9ca3af" : "#fff", borderRadius:10, cursor: guardando ? "default" : "pointer", fontWeight:700, fontSize:14 }}>
+            {guardando ? guardandoMsg : "✓ Guardar"}
           </button>
           <button onClick={onCancel} style={{ padding:"11px 16px", background:"transparent", border:"1px solid #374151", color:"#6b7280", borderRadius:10, cursor:"pointer", fontWeight:700 }}>
             Cancelar

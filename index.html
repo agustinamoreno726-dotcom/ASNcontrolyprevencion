@@ -816,7 +816,65 @@ function generarInformeWpp(entity, ch, isCompanyVehicle = false) {
   return msg;
 }
 
+// Comprime una imagen a max ~200KB antes de guardar
+async function comprimirImagen(file, maxWidth=640, quality=0.55) {
+  // Si el archivo ya es pequeño (< 200KB), comprimir menos agresivo
+  if (file.size < 200 * 1024) { maxWidth = 800; quality = 0.70; }
+
+  return new Promise((res, rej) => {
+    // Timeout de seguridad: si tarda más de 15s, rechazar con mensaje claro
+    const timeout = setTimeout(() => rej(new Error("Tiempo de espera agotado al procesar la foto. Intentá con una foto más pequeña.")), 15000);
+
+    const reader = new FileReader();
+    reader.onerror = (e) => { clearTimeout(timeout); rej(e); };
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = (e) => { clearTimeout(timeout); rej(e); };
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          let w = img.width, h = img.height;
+          // Compresión en dos pasos si la imagen es muy grande (> 2x maxWidth)
+          if (w > maxWidth * 2) {
+            const mid = maxWidth * 2;
+            const c1 = document.createElement("canvas");
+            let w1 = w, h1 = h;
+            h1 = Math.round(h1 * mid / w1); w1 = mid;
+            c1.width = w1; c1.height = h1;
+            c1.getContext("2d").drawImage(img, 0, 0, w1, h1);
+            w = w1; h = h1;
+            // Reusar como fuente para el paso final
+            const imgMid = new Image();
+            imgMid.onload = () => {
+              let fw = imgMid.width, fh = imgMid.height;
+              if (fw > maxWidth) { fh = Math.round(fh * maxWidth / fw); fw = maxWidth; }
+              canvas.width = fw; canvas.height = fh;
+              canvas.getContext("2d").drawImage(imgMid, 0, 0, fw, fh);
+              clearTimeout(timeout);
+              res(canvas.toDataURL("image/jpeg", quality));
+            };
+            imgMid.onerror = (e) => { clearTimeout(timeout); rej(e); };
+            imgMid.src = c1.toDataURL("image/jpeg", 0.85);
+            return;
+          }
+          if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          clearTimeout(timeout);
+          res(canvas.toDataURL("image/jpeg", quality));
+        } catch(err) { clearTimeout(timeout); rej(err); }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function imgUrlToBase64(url) {
+  if (!url) return null;
+  // Si ya es base64, retornar directo
+  if (url.startsWith("data:")) return url;
+  // Si es URL externa, fetch
   try {
     const resp = await fetch(url);
     const blob = await resp.blob();
@@ -3145,23 +3203,17 @@ function RepairForm({ onSave, onCancel }) {
     if (guardando) return;
     setGuardando(true);
 
+    // Comprimir y convertir fotos a base64
     const uploadedUrls = [];
-    if (photos.length > 0) {
-      const { storage, ref, uploadBytes, getDownloadURL } = window._firebase;
-      const repId = `rep_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-      for (let i = 0; i < photos.length; i++) {
-        setGuardandoMsg(`⏳ Foto ${i+1} de ${photos.length}...`);
-        try {
-          const storageRef = ref(storage, `repairs/${repId}/foto_${i}.jpg`);
-          await uploadBytes(storageRef, photos[i].file);
-          const url = await getDownloadURL(storageRef);
-          uploadedUrls.push(url);
-        } catch(err) {
-          console.error("Error subiendo foto:", err);
-          alert("Error al subir la foto. Verificá tu conexión e intentá de nuevo.\n\nDetalle: " + (err.message || err));
-          setGuardando(false);
-          return;
-        }
+    for (let i = 0; i < photos.length; i++) {
+      setGuardandoMsg(`⏳ Procesando foto ${i+1} de ${photos.length}...`);
+      try {
+        const b64 = await comprimirImagen(photos[i].file);
+        uploadedUrls.push(b64);
+      } catch(err) {
+        console.error("Error procesando foto:", err);
+        const saltear = window.confirm(`⚠️ No se pudo procesar la foto ${i+1}.\n\n${err.message || err}\n\n¿Continuar sin esa foto?`);
+        if (!saltear) { setGuardando(false); return; }
       }
     }
 
@@ -3616,10 +3668,8 @@ function Checks({ data, setPage, preselectedClientId }) {
     }
     const tieneTrailer = selectedEntityForSave?.tieneTrailer || false;
 
-    // Subir fotos a Firebase Storage
+    // Comprimir y convertir fotos a base64
     const uploadedPhotos = {};
-    const checkId = `check_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-    const { storage, ref, uploadBytes, getDownloadURL } = window._firebase;
     const totalFotos = Object.values(itemPhotos).reduce((acc, arr) => acc + (arr||[]).length, 0);
     let fotoN = 0;
     for (const [itemId, photos] of Object.entries(itemPhotos)) {
@@ -3629,20 +3679,38 @@ function Checks({ data, setPage, preselectedClientId }) {
         const p = photos[i];
         if (!p.file) continue;
         fotoN++;
-        setSavingMsg(`Subiendo foto ${fotoN} de ${totalFotos}...`);
+        setSavingMsg(`Procesando foto ${fotoN} de ${totalFotos}...`);
         try {
-          const storageRef = ref(storage, `checks/${checkId}/${itemId}_${i}.jpg`);
-          await uploadBytes(storageRef, p.file);
-          const url = await getDownloadURL(storageRef);
-          uploadedPhotos[itemId].push(url);
+          const b64 = await comprimirImagen(p.file);
+          uploadedPhotos[itemId].push(b64);
         } catch(err) {
-          console.error("Error subiendo foto:", err);
-          alert(`Error al subir foto ${fotoN}. Verificá la conexión e intentá de nuevo.`);
-          setSaving(false); setSavingMsg(""); return;
+          console.error("Error procesando foto:", err);
+          const saltear = window.confirm(
+            `⚠️ No se pudo procesar la foto ${fotoN} de ${totalFotos}.\n\n${err.message || err}\n\n¿Continuar guardando el chequeo sin esa foto?`
+          );
+          if (!saltear) { setSaving(false); setSavingMsg(""); return; }
+          // Si elige continuar, simplemente no agregar esa foto
         }
       }
     }
 
+    setSavingMsg("Guardando chequeo...");
+    const checkId = `check_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    // Guardar fotos en documento separado para no superar límite de Firestore (1MB)
+    const photoRefs = {};
+    const hasPhotos = Object.keys(uploadedPhotos).length > 0;
+    if (hasPhotos) {
+      setSavingMsg("Guardando fotos...");
+      try {
+        await fbAdd("check_photos", { checkId, itemPhotos: uploadedPhotos, createdAt: Date.now() });
+        // Solo guardamos referencia al doc de fotos en el check principal
+        Object.keys(uploadedPhotos).forEach(k => { photoRefs[k] = uploadedPhotos[k].length; });
+      } catch(err) {
+        console.error("Error guardando fotos:", err);
+        // Si falla por tamaño, intentar sin fotos y avisar
+        alert("Las fotos son demasiado grandes para guardar. Se guardará el chequeo sin fotos. Intentá con fotos de menor resolución.");
+      }
+    }
     setSavingMsg("Guardando chequeo...");
     const check = {
       clientId: mode === "client" ? clientId : null,
@@ -3651,15 +3719,27 @@ function Checks({ data, setPage, preselectedClientId }) {
       perito, kms, nroMovil, itemStates, detalle, recomendaciones,
       trailerIncluido: tieneTrailer,
       trailerItemStates: tieneTrailer ? trailerItemStates : {},
-      itemPhotos: uploadedPhotos,
+      itemPhotos: hasPhotos ? uploadedPhotos : {},
       createdAt: Date.now()
     };
     try {
       await fbAdd("checks", check);
     } catch(err) {
       console.error("Error guardando chequeo:", err);
-      alert("Error al guardar el chequeo. Verificá la conexión.");
-      setSaving(false); setSavingMsg(""); return;
+      // Si falla por tamaño (fotos en el doc principal), guardar sin fotos
+      if (err.message && err.message.includes("exceeds")) {
+        const checkSinFotos = { ...check, itemPhotos: {} };
+        try {
+          await fbAdd("checks", checkSinFotos);
+          alert("Chequeo guardado. Las fotos eran muy pesadas y no se pudieron incluir.");
+        } catch(err2) {
+          alert("Error al guardar el chequeo: " + (err2.message || err2));
+          setSaving(false); setSavingMsg(""); return;
+        }
+      } else {
+        alert("Error al guardar el chequeo: " + (err.message || err));
+        setSaving(false); setSavingMsg(""); return;
+      }
     }
     setSaving(false); setSavingMsg("");
     setSaved(true);

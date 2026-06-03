@@ -345,7 +345,7 @@ function Nav({ page, setPage }) {
     { id: "clients",       icon: "👤", label: "Clientes" },
     { id: "checks",        icon: "✅", label: "Chequeos" },
     { id: "companies",     icon: "🏢", label: "Empresas" },
-    { id: "gps",           icon: "📡", label: "GPS" },
+    { id: "facturacion",   icon: "🧾", label: "Facturas" },
     { id: "buscar-patente",icon: "🔍", label: "Buscar" },
   ];
   return (
@@ -1165,16 +1165,206 @@ function CheckDetailModal({ ch, entity, isCompanyVehicle, onClose }) {
   const trailerStates = ch.trailerItemStates || {};
   const tieneTrailerEnCheck = ch.trailerIncluido && Object.keys(trailerStates).length > 0;
 
+  // ── Modo edición de fotos ──
+  const [modoFotos, setModoFotos] = useState(false);
+  const [soloNovedades, setSoloNovedades] = useState(true); // mostrar solo críticos/prev/solicitar sin foto
+  const [fotasNuevas, setFotasNuevas] = useState({}); // { [itemId]: [{ dataUrl, file }] }
+  const [guardandoFotos, setGuardandoFotos] = useState(false);
+  const [fotosSaved, setFotosSaved] = useState(false);
+  // fotosActuales permite reflejar las nuevas fotos guardadas sin cerrar el modal
+  const [fotosActuales, setFotosActuales] = useState(ch.itemPhotos || {});
+
+  // Sincronizar fotosActuales si ch cambia desde afuera
+  useEffect(() => { setFotosActuales(ch.itemPhotos || {}); }, [ch.id]);
+
+  function agregarFotoNueva(itemId, files) {
+    if (!files || files.length === 0) return;
+    const nuevas = Array.from(files).map(f => ({ file: f, dataUrl: URL.createObjectURL(f) }));
+    setFotasNuevas(prev => ({ ...prev, [itemId]: [...(prev[itemId]||[]), ...nuevas] }));
+  }
+
+  function quitarFotaNueva(itemId, idx) {
+    setFotasNuevas(prev => {
+      const arr = [...(prev[itemId]||[])];
+      arr.splice(idx, 1);
+      return { ...prev, [itemId]: arr };
+    });
+  }
+
+  async function guardarFotasNuevas() {
+    const totalNuevas = Object.values(fotasNuevas).reduce((a, arr) => a + arr.length, 0);
+    if (totalNuevas === 0) { setModoFotos(false); return; }
+    setGuardandoFotos(true);
+
+    try {
+      // Comprimir y convertir a base64
+      const uploadedNew = {};
+      for (const [itemId, photos] of Object.entries(fotasNuevas)) {
+        if (!photos.length) continue;
+        uploadedNew[itemId] = [];
+        for (const p of photos) {
+          if (!p.file) continue;
+          try {
+            const b64 = await comprimirImagen(p.file);
+            uploadedNew[itemId].push(b64);
+          } catch(e) { console.error("Error comprimiendo foto:", e); }
+        }
+      }
+
+      // Combinar con fotos existentes
+      const fotosFinales = { ...fotosActuales };
+      for (const [itemId, urls] of Object.entries(uploadedNew)) {
+        if (!urls.length) continue;
+        fotosFinales[itemId] = [...(fotosFinales[itemId]||[]), ...urls];
+      }
+
+      // Guardar en Firestore
+      await fbUpdate("checks", ch.id, { itemPhotos: fotosFinales });
+
+      setFotosActuales(fotosFinales);
+      setFotasNuevas({});
+      setFotosSaved(true);
+      setTimeout(() => setFotosSaved(false), 2500);
+      setModoFotos(false);
+    } catch(err) {
+      alert("Error guardando fotos: " + (err.message || err));
+    } finally {
+      setGuardandoFotos(false);
+    }
+  }
+
+  // ── Vista modo edición fotos ──
+  if (modoFotos) {
+    const allItemsFlat = CHECK_SECTIONS.flatMap(s => s.items);
+    const itemsFiltrados = soloNovedades
+      ? allItemsFlat.filter(i => {
+          const est = estados[i.id];
+          const tieneFoto = (fotosActuales[i.id]||[]).length > 0 || (fotasNuevas[i.id]||[]).length > 0;
+          return (est === "critico" || est === "prevencion" || est === "solicitar") && !tieneFoto;
+        })
+      : allItemsFlat;
+
+    const totalNuevas = Object.values(fotasNuevas).reduce((a, arr) => a + arr.length, 0);
+
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.95)", backdropFilter:"blur(6px)", zIndex:400, display:"flex", flexDirection:"column", overflowY:"auto" }}>
+        <div style={{ maxWidth:560, width:"100%", margin:"0 auto", padding:"16px 14px 120px" }}>
+
+          {/* Header modo fotos */}
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
+            <button onClick={() => { setModoFotos(false); setFotasNuevas({}); }}
+              style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.2)", color:"#f97316", borderRadius:10, padding:"8px 14px", fontWeight:700, fontSize:13, cursor:"pointer" }}>← Volver</button>
+            <div>
+              <div style={{ color:"#f1f5f9", fontWeight:900, fontSize:16 }}>📷 Agregar fotos</div>
+              <div style={{ color:"#6b7280", fontSize:12 }}>{new Date(ch.createdAt).toLocaleDateString("es-AR")}{ch.perito ? ` · ${ch.perito}` : ""}</div>
+            </div>
+          </div>
+
+          {/* Filtro */}
+          <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+            <button onClick={() => setSoloNovedades(true)}
+              style={{ flex:1, padding:"9px", borderRadius:10, border:`2px solid ${soloNovedades ? "#ef4444" : "#2a2a2a"}`, background: soloNovedades ? "#ef444422" : "#111", color: soloNovedades ? "#ef4444" : "#6b7280", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+              🔴 Sin foto (nov.)
+            </button>
+            <button onClick={() => setSoloNovedades(false)}
+              style={{ flex:1, padding:"9px", borderRadius:10, border:`2px solid ${!soloNovedades ? "#f97316" : "#2a2a2a"}`, background: !soloNovedades ? "#f9731622" : "#111", color: !soloNovedades ? "#f97316" : "#6b7280", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+              Todos los ítems
+            </button>
+          </div>
+
+          {itemsFiltrados.length === 0 && (
+            <div style={{ textAlign:"center", padding:"40px 20px", color:"#4b5563" }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>✅</div>
+              <div style={{ fontSize:14, fontWeight:700, color:"#10b981" }}>Todos los ítems tienen foto</div>
+              <div style={{ fontSize:12, marginTop:6 }}>Podés cambiar el filtro para ver todos los ítems.</div>
+            </div>
+          )}
+
+          {itemsFiltrados.map(item => {
+            const est = ESTADOS.find(e => e.id === estados[item.id]);
+            const fotosExist = fotosActuales[item.id] || [];
+            const fotosNew = fotasNuevas[item.id] || [];
+            const borderColor = est?.id === "critico" ? "#ef4444" : est?.id === "prevencion" ? "#f59e0b" : est?.id === "solicitar" ? "#60a5fa" : "#2a2a2a";
+
+            return (
+              <div key={item.id} style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:10, border:`1px solid ${borderColor}44` }}>
+                {/* Info del ítem */}
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <span style={{ color:"#e5e7eb", fontSize:13, fontWeight:600, flex:1, marginRight:8 }}>{item.label}</span>
+                  {est && <span style={{ fontSize:10, fontWeight:700, padding:"2px 10px", borderRadius:20, background:est.bg, color:est.color, border:`1px solid ${est.color}44`, whiteSpace:"nowrap" }}>{est.label}</span>}
+                </div>
+
+                {/* Fotos existentes */}
+                {fotosExist.length > 0 && (
+                  <div style={{ marginBottom:8 }}>
+                    <div style={{ color:"#6b7280", fontSize:10, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Ya guardadas ({fotosExist.length})</div>
+                    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                      {fotosExist.map((url, pidx) => (
+                        <a key={pidx} href={url} target="_blank" rel="noopener noreferrer">
+                          <img src={url} style={{ width:60, height:60, objectFit:"cover", borderRadius:8, border:"2px solid #3b82f666", cursor:"pointer" }} alt={`Foto ${pidx+1}`}/>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Fotos nuevas a subir */}
+                {fotosNew.length > 0 && (
+                  <div style={{ marginBottom:8 }}>
+                    <div style={{ color:"#f97316", fontSize:10, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Por guardar ({fotosNew.length})</div>
+                    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                      {fotosNew.map((p, pidx) => (
+                        <div key={pidx} style={{ position:"relative" }}>
+                          <img src={p.dataUrl} style={{ width:60, height:60, objectFit:"cover", borderRadius:8, border:"2px solid #f9731666" }} alt={`Nueva ${pidx+1}`}/>
+                          <button onClick={() => quitarFotaNueva(item.id, pidx)}
+                            style={{ position:"absolute", top:-6, right:-6, width:18, height:18, borderRadius:"50%", background:"#ef4444", border:"none", color:"#fff", fontSize:10, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0, lineHeight:1 }}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Botón capturar */}
+                <label style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 14px", background:"rgba(249,115,22,0.07)", border:"1px dashed rgba(249,115,22,0.35)", borderRadius:10, cursor:"pointer", color:"#f97316", fontWeight:700, fontSize:13 }}>
+                  <span>📷</span>
+                  <span>{fotosExist.length + fotosNew.length > 0 ? "Agregar otra foto" : "Capturar foto"}</span>
+                  <input type="file" accept="image/*" capture="environment" multiple style={{ display:"none" }}
+                    onChange={e => agregarFotoNueva(item.id, e.target.files)}/>
+                </label>
+              </div>
+            );
+          })}
+
+          {/* Botón guardar fijo */}
+          {totalNuevas > 0 && (
+            <div style={{ position:"fixed", bottom:80, left:"50%", transform:"translateX(-50%)", width:"calc(100% - 28px)", maxWidth:532, zIndex:500 }}>
+              <button onClick={guardarFotasNuevas} disabled={guardandoFotos}
+                style={{ width:"100%", padding:"15px", borderRadius:14, background: guardandoFotos ? "#6b7280" : "linear-gradient(135deg,#f97316,#ea580c)", border:"none", color:"#fff", fontWeight:900, fontSize:15, cursor: guardandoFotos ? "not-allowed" : "pointer", boxShadow:"0 4px 20px rgba(249,115,22,0.4)" }}>
+                {guardandoFotos ? "⏳ Guardando..." : `💾 Guardar ${totalNuevas} foto${totalNuevas !== 1 ? "s" : ""}`}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Vista normal (detalle) ──
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", backdropFilter:"blur(6px)", zIndex:400, display:"flex", flexDirection:"column", overflowY:"auto" }}>
       <div style={{ maxWidth:560, width:"100%", margin:"0 auto", padding:"16px 14px 120px" }}>
         {/* Header */}
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
           <button onClick={onClose} style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.2)", color:"#f97316", borderRadius:10, padding:"8px 14px", fontWeight:700, fontSize:13, cursor:"pointer" }}>← Cerrar</button>
-          <div>
+          <div style={{ flex:1 }}>
             <div style={{ color:"#f1f5f9", fontWeight:900, fontSize:16 }}>Detalle del Chequeo</div>
             <div style={{ color:"#6b7280", fontSize:12 }}>{new Date(ch.createdAt).toLocaleDateString("es-AR")}{ch.perito ? ` · ${ch.perito}` : ""}{ch.kms ? ` · ${ch.kms} km` : ""}</div>
           </div>
+          {fotosSaved && <span style={{ color:"#10b981", fontSize:12, fontWeight:700 }}>✅ Guardado</span>}
+          <button onClick={() => setModoFotos(true)}
+            style={{ padding:"8px 12px", borderRadius:10, background:"rgba(96,165,250,0.08)", border:"1px solid rgba(96,165,250,0.25)", color:"#60a5fa", fontWeight:700, fontSize:12, cursor:"pointer", whiteSpace:"nowrap" }}>
+            📷 Fotos
+          </button>
         </div>
 
         {/* Resumen numérico */}
@@ -1206,13 +1396,12 @@ function CheckDetailModal({ ch, entity, isCompanyVehicle, onClose }) {
         {/* Secciones */}
         {CHECK_SECTIONS.map(sec => {
           const items = sec.items.map(item => ({ ...item, estadoId: estados[item.id] }));
-          const sinEstado = items.filter(i => !i.estadoId).length;
           return (
             <div key={sec.id} style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:10, border:"1px solid #2a2a2a" }}>
               <div style={{ color:"#e5e7eb", fontWeight:700, fontSize:13, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:10 }}>{sec.icon} {sec.title}</div>
               {items.map(item => {
                 const est = ESTADOS.find(e => e.id === item.estadoId);
-                const photos = (ch.itemPhotos || {})[item.id] || [];
+                const photos = (fotosActuales[item.id] || []);
                 return (
                   <div key={item.id} style={{ borderBottom:"1px solid #232323" }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0" }}>
@@ -1265,7 +1454,7 @@ function CheckDetailModal({ ch, entity, isCompanyVehicle, onClose }) {
         {(() => {
           const allItemsFlat = CHECK_SECTIONS.flatMap(s => s.items);
           const criticos = allItemsFlat.filter(i => (ch.itemStates||{})[i.id] === "critico");
-          const fotasCriticas = criticos.flatMap(i => ((ch.itemPhotos||{})[i.id]||[]).map(url => ({ url, label: i.label })));
+          const fotasCriticas = criticos.flatMap(i => ((fotosActuales[i.id]||[])).map(url => ({ url, label: i.label })));
           if (fotasCriticas.length === 0) return null;
           return (
             <div style={{ background:"rgba(239,68,68,0.06)", borderRadius:14, padding:14, marginBottom:10, border:"1px solid rgba(239,68,68,0.25)" }}>
@@ -1296,6 +1485,357 @@ function CheckDetailModal({ ch, entity, isCompanyVehicle, onClose }) {
   );
 }
 
+/* ─────────────── INFORME COMPLETO DEL VEHÍCULO ─────────────── */
+
+function formatFechaES(ts) {
+  return new Date(ts).toLocaleDateString("es-AR");
+}
+
+function InformeVehiculoModal({ entity, checks, repairs, isCompanyVehicle, onClose }) {
+  const hoy = new Date();
+  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const [desde, setDesde] = React.useState(primerDiaMes.toISOString().slice(0,10));
+  const [hasta, setHasta] = React.useState(hoy.toISOString().slice(0,10));
+  const [generando, setGenerando] = React.useState(false);
+
+  const desdeTs = new Date(desde + "T00:00:00").getTime();
+  const hastaTs = new Date(hasta + "T23:59:59").getTime();
+
+  // Reparaciones filtradas por rango
+  const repsFiltradas = (repairs||[]).filter(r => {
+    const t = r.createdAt || 0;
+    return t >= desdeTs && t <= hastaTs;
+  }).sort((a,b) => b.createdAt - a.createdAt);
+
+  const totalCosto = repsFiltradas.reduce((s, r) => s + (Number(r.costo)||0), 0);
+
+  // Último chequeo
+  const ultimoCheck = [...(checks||[])].sort((a,b) => b.createdAt - a.createdAt)[0];
+  const allItems = CHECK_SECTIONS.flatMap(s => s.items);
+
+  // Semáforo del último chequeo
+  function semaforoCheck(ch) {
+    if (!ch) return { color:"#6b7280", emoji:"⚪", label:"Sin chequeos" };
+    const estados = ch.itemStates || {};
+    const criticos = allItems.filter(i => estados[i.id] === "critico").length;
+    const prev = allItems.filter(i => estados[i.id] === "prevencion").length;
+    const ok = allItems.filter(i => estados[i.id] === "ok").length;
+    const pct = Math.round((ok / allItems.length) * 100);
+    if (criticos > 0) return { color:"#ef4444", emoji:"🔴", label:`${criticos} crítico${criticos>1?"s":""}`, pct };
+    if (prev > 0)     return { color:"#f59e0b", emoji:"🟡", label:`${prev} en prevención`, pct };
+    return              { color:"#10b981", emoji:"🟢", label:`${pct}% OK`, pct };
+  }
+
+  const semaforo = semaforoCheck(ultimoCheck);
+
+  // Generar texto WhatsApp
+  function generarWpp() {
+    const nombre = isCompanyVehicle
+      ? `${entity.companyName} · ${entity.plate}`
+      : `${entity.name} · ${entity.plate}`;
+
+    let msg = `📊 *INFORME DE VEHÍCULO — ASN*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `🚗 *${nombre}*\n`;
+    if (entity.vehicle) msg += `Tipo: ${entity.vehicle}\n`;
+    msg += `\n`;
+
+    // Semaforo último chequeo
+    msg += `${semaforo.emoji} *ÚLTIMO CHEQUEO*\n`;
+    if (ultimoCheck) {
+      msg += `Fecha: ${formatFechaES(ultimoCheck.createdAt)}\n`;
+      msg += `Estado: ${semaforo.label}\n`;
+      const estados = ultimoCheck.itemStates || {};
+      const criticos = allItems.filter(i => estados[i.id] === "critico").map(i => i.label);
+      const prev = allItems.filter(i => estados[i.id] === "prevencion").map(i => i.label);
+      if (criticos.length) { msg += `🔴 Críticos:\n`; criticos.forEach(i => msg += `  • ${i}\n`); }
+      if (prev.length)     { msg += `🟡 Prevención:\n`; prev.forEach(i => msg += `  • ${i}\n`); }
+      if (ultimoCheck.recomendaciones) msg += `💡 ${ultimoCheck.recomendaciones}\n`;
+    } else {
+      msg += `Sin chequeos registrados.\n`;
+    }
+
+    msg += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `🔧 *REPARACIONES* (${formatFechaES(desdeTs)} → ${formatFechaES(hastaTs)})\n`;
+    if (repsFiltradas.length === 0) {
+      msg += `Sin reparaciones en el período.\n`;
+    } else {
+      repsFiltradas.forEach(r => {
+        const cat = REPAIR_CATS.find(c => c.id === r.categoria);
+        msg += `• ${formatFechaES(r.createdAt)} — ${r.descripcion}`;
+        if (r.costo) msg += ` — $${Number(r.costo).toLocaleString("es-AR")}`;
+        if (cat) msg += ` (${cat.label})`;
+        msg += `\n`;
+      });
+      msg += `💰 *Total: $${totalCosto.toLocaleString("es-AR")}*\n`;
+    }
+
+    msg += `\n━━━━━━━━━━━━━━━━━━━━\n_ASN · Control y Prevención Vehicular_`;
+    return msg;
+  }
+
+  function compartirWpp() {
+    const msg = generarWpp();
+    let tel = "";
+    if (!isCompanyVehicle && entity.phone) {
+      tel = (entity.phone||"").replace(/\D/g,"");
+      if (tel.startsWith("0")) tel = tel.slice(1);
+      if (!tel.startsWith("54")) tel = "549" + tel;
+      else if (tel.startsWith("54") && !tel.startsWith("549")) tel = "549" + tel.slice(2);
+    }
+    const url = tel ? `https://wa.me/${tel}?text=` : `https://wa.me/?text=`;
+    window.open(url + encodeURIComponent(msg), "_blank");
+  }
+
+  async function generarPDF() {
+    setGenerando(true);
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+      const W = 210, M = 14;
+      let y = 14;
+
+      // Header
+      doc.setDrawColor(249,115,22); doc.setLineWidth(0.8);
+      doc.line(M, y+10, W-M, y+10);
+      doc.setFontSize(20); doc.setFont("helvetica","bold"); doc.setTextColor(249,115,22);
+      doc.text("ASN", M, y+7);
+      doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+      doc.text("Control y Prevención Vehicular", M+16, y+4);
+      doc.setFontSize(8); doc.setTextColor(55,65,81);
+      doc.text("Informe de Vehículo", M+16, y+8.5);
+      doc.setFontSize(8); doc.setTextColor(107,114,128);
+      doc.text("Generado: " + formatFechaES(Date.now()), W-M, y+7, { align:"right" });
+      y += 18;
+
+      // Info vehículo
+      let infoBody = isCompanyVehicle
+        ? [["Empresa", entity.companyName||"—"],["Dominio",entity.plate||"—"],["Vehículo",entity.vehicle||"—"]]
+        : [["Cliente",entity.name||"—"],["Dominio",entity.plate||"—"],["Vehículo",entity.vehicle||"—"]];
+      doc.autoTable({ startY:y, body:infoBody, theme:"plain",
+        styles:{fontSize:9,cellPadding:2.5,textColor:[55,65,81]},
+        columnStyles:{0:{fontStyle:"bold",textColor:[107,114,128],cellWidth:35},1:{textColor:[17,24,39]}},
+        margin:{left:M,right:M} });
+      y = doc.lastAutoTable.finalY + 6;
+
+      // Semáforo
+      const sColor = semaforo.color === "#ef4444" ? [239,68,68] : semaforo.color === "#f59e0b" ? [245,158,11] : [16,185,129];
+      doc.setFillColor(...sColor); doc.roundedRect(M, y, W-M*2, 14, 3, 3, "F");
+      doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+      doc.text(`${semaforo.emoji}  ÚLTIMO CHEQUEO: ${semaforo.label.toUpperCase()}`, M+4, y+9);
+      if (ultimoCheck) {
+        doc.setFontSize(8); doc.setFont("helvetica","normal");
+        doc.text(formatFechaES(ultimoCheck.createdAt) + (ultimoCheck.perito ? ` · ${ultimoCheck.perito}` : ""), W-M-2, y+9, { align:"right" });
+      }
+      y += 18;
+
+      // Detalle del último chequeo
+      if (ultimoCheck) {
+        const estados = ultimoCheck.itemStates || {};
+        const criticosItems = allItems.filter(i => estados[i.id] === "critico");
+        const prevItems     = allItems.filter(i => estados[i.id] === "prevencion");
+        const solicitarItems= allItems.filter(i => estados[i.id] === "solicitar");
+        const okCount       = allItems.filter(i => estados[i.id] === "ok").length;
+
+        const cards = [
+          {val:okCount, label:"OK", color:[16,185,129]},
+          {val:criticosItems.length, label:"Críticos", color:[239,68,68]},
+          {val:prevItems.length, label:"Prevención", color:[245,158,11]},
+          {val:solicitarItems.length, label:"Solicitar", color:[96,165,250]},
+        ];
+        const cw = (W-M*2-9)/4;
+        cards.forEach((c,i) => {
+          const cx = M + i*(cw+3);
+          doc.setFillColor(249,250,251); doc.setDrawColor(229,231,235); doc.setLineWidth(0.3);
+          doc.roundedRect(cx, y, cw, 14, 2, 2, "FD");
+          doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(...c.color);
+          doc.text(String(c.val), cx+cw/2, y+8, {align:"center"});
+          doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+          doc.text(c.label, cx+cw/2, y+12.5, {align:"center"});
+        });
+        y += 18;
+
+        // Items críticos y prevención
+        if (criticosItems.length > 0) {
+          doc.autoTable({ startY:y,
+            head:[["🔴 CRÍTICOS — Atención inmediata"]],
+            body: criticosItems.map(i => [i.label]),
+            theme:"plain",
+            headStyles:{fillColor:[239,68,68],textColor:[255,255,255],fontStyle:"bold",fontSize:8},
+            styles:{fontSize:8,cellPadding:2,textColor:[55,65,81]},
+            margin:{left:M,right:M} });
+          y = doc.lastAutoTable.finalY + 3;
+        }
+        if (prevItems.length > 0) {
+          doc.autoTable({ startY:y,
+            head:[["🟡 PREVENCIÓN — Seguimiento"]],
+            body: prevItems.map(i => [i.label]),
+            theme:"plain",
+            headStyles:{fillColor:[245,158,11],textColor:[255,255,255],fontStyle:"bold",fontSize:8},
+            styles:{fontSize:8,cellPadding:2,textColor:[55,65,81]},
+            margin:{left:M,right:M} });
+          y = doc.lastAutoTable.finalY + 3;
+        }
+        if (ultimoCheck.recomendaciones) {
+          const lines = doc.splitTextToSize(ultimoCheck.recomendaciones, W-M*2-6);
+          doc.setFillColor(255,251,235); doc.setDrawColor(252,211,77); doc.setLineWidth(0.3);
+          doc.roundedRect(M, y, W-M*2, lines.length*4+10, 2, 2, "FD");
+          doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(146,64,14);
+          doc.text("Recomendaciones", M+3, y+5);
+          doc.setFont("helvetica","normal"); doc.setTextColor(92,64,14);
+          doc.text(lines, M+3, y+10);
+          y += lines.length*4+14;
+        }
+      }
+
+      y += 4;
+      // Reparaciones del período
+      doc.setFontSize(10); doc.setFont("helvetica","bold"); doc.setTextColor(167,139,250);
+      doc.text(`REPARACIONES  ${formatFechaES(desdeTs)}  →  ${formatFechaES(hastaTs)}`, M, y);
+      y += 5;
+
+      if (repsFiltradas.length === 0) {
+        doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+        doc.text("Sin reparaciones en el período seleccionado.", M, y+5);
+        y += 10;
+      } else {
+        const rows = repsFiltradas.map(r => {
+          const cat = REPAIR_CATS.find(c => c.id === r.categoria);
+          return [
+            formatFechaES(r.createdAt),
+            r.descripcion || "—",
+            cat?.label || r.categoria || "—",
+            r.taller || "—",
+            r.costo ? `$${Number(r.costo).toLocaleString("es-AR")}` : "—"
+          ];
+        });
+        doc.autoTable({
+          startY: y,
+          head:[["Fecha","Descripción","Categoría","Taller","Costo"]],
+          body: rows,
+          theme:"striped",
+          styles:{fontSize:7.5,cellPadding:2,textColor:[55,65,81]},
+          headStyles:{fillColor:[109,40,217],textColor:[255,255,255],fontStyle:"bold",fontSize:8},
+          columnStyles:{0:{cellWidth:20},2:{cellWidth:28},3:{cellWidth:25},4:{cellWidth:22,halign:"right"}},
+          margin:{left:M,right:M},
+          foot:[[" ","","","Total:",`$${totalCosto.toLocaleString("es-AR")}`]],
+          footStyles:{fillColor:[243,244,246],fontStyle:"bold",textColor:[55,65,81],fontSize:8},
+        });
+        y = doc.lastAutoTable.finalY + 5;
+      }
+
+      // Footer en todas las páginas
+      const totalPags = doc.getNumberOfPages();
+      for (let p = 1; p <= totalPags; p++) {
+        doc.setPage(p);
+        const ph = doc.internal.pageSize.getHeight();
+        doc.setDrawColor(249,115,22); doc.setLineWidth(0.5);
+        doc.line(M, ph-12, W-M, ph-12);
+        doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+        doc.text("ASN · Control y Prevención Vehicular", M, ph-7);
+        doc.text(`Página ${p}/${totalPags}`, W-M, ph-7, {align:"right"});
+      }
+
+      const nombre = `ASN_Informe_${(entity.plate||"vehiculo").replace(/\s/g,"_")}_${formatFechaES(Date.now()).replace(/\//g,"-")}.pdf`;
+      doc.save(nombre);
+    } catch(err) {
+      console.error("Error generando PDF:", err);
+      alert("Error al generar el PDF: " + err.message);
+    }
+    setGenerando(false);
+  }
+
+  const INPUT_STYLE = { padding:"9px 12px", borderRadius:10, background:"#0f0f0f", border:"1px solid #333", color:"#e5e7eb", fontSize:13, outline:"none", width:"100%" };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.93)", backdropFilter:"blur(6px)", zIndex:500, display:"flex", flexDirection:"column", overflowY:"auto" }}>
+      <div style={{ maxWidth:560, width:"100%", margin:"0 auto", padding:"16px 14px 120px" }}>
+
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+          <button onClick={onClose} style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.2)", color:"#f97316", borderRadius:10, padding:"8px 14px", fontWeight:700, fontSize:13, cursor:"pointer" }}>← Cerrar</button>
+          <div>
+            <div style={{ color:"#f1f5f9", fontWeight:900, fontSize:16 }}>📊 Informe del Vehículo</div>
+            <div style={{ color:"#6b7280", fontSize:12 }}>{isCompanyVehicle ? entity.companyName : entity.name} · {entity.plate}</div>
+          </div>
+        </div>
+
+        {/* Semáforo último chequeo */}
+        <div style={{ background:`${semaforo.color}18`, border:`1px solid ${semaforo.color}44`, borderRadius:16, padding:16, marginBottom:16 }}>
+          <div style={{ color:semaforo.color, fontWeight:900, fontSize:18, marginBottom:4 }}>{semaforo.emoji} {semaforo.label.toUpperCase()}</div>
+          {ultimoCheck ? (<>
+            <div style={{ color:"#9ca3af", fontSize:12 }}>Último chequeo: {formatFechaES(ultimoCheck.createdAt)}{ultimoCheck.perito ? ` · ${ultimoCheck.perito}` : ""}</div>
+            {(() => {
+              const estados = ultimoCheck.itemStates || {};
+              const criticos = allItems.filter(i => estados[i.id] === "critico").map(i => i.label);
+              const prev = allItems.filter(i => estados[i.id] === "prevencion").map(i => i.label);
+              return (<>
+                {criticos.length > 0 && <div style={{ marginTop:8 }}><div style={{ color:"#ef4444", fontSize:11, fontWeight:700, marginBottom:3 }}>🔴 Críticos:</div>{criticos.map((l,i) => <div key={i} style={{ color:"#fca5a5", fontSize:12, paddingLeft:10 }}>• {l}</div>)}</div>}
+                {prev.length > 0 && <div style={{ marginTop:6 }}><div style={{ color:"#f59e0b", fontSize:11, fontWeight:700, marginBottom:3 }}>🟡 Prevención:</div>{prev.map((l,i) => <div key={i} style={{ color:"#fcd34d", fontSize:12, paddingLeft:10 }}>• {l}</div>)}</div>}
+                {ultimoCheck.recomendaciones && <div style={{ marginTop:8, color:"#d97706", fontSize:12 }}>💡 {ultimoCheck.recomendaciones}</div>}
+              </>);
+            })()}
+          </>) : <div style={{ color:"#6b7280", fontSize:12 }}>Sin chequeos registrados</div>}
+        </div>
+
+        {/* Filtro de fechas para reparaciones */}
+        <div style={{ background:"#1a1a1a", borderRadius:16, padding:16, marginBottom:16, border:"1px solid #2a2a2a" }}>
+          <div style={{ color:"#a78bfa", fontWeight:700, fontSize:13, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:12 }}>🔧 Reparaciones por período</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+            <div>
+              <label style={{ color:"#6b7280", fontSize:11, fontWeight:700, display:"block", marginBottom:4 }}>DESDE</label>
+              <input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={INPUT_STYLE}/>
+            </div>
+            <div>
+              <label style={{ color:"#6b7280", fontSize:11, fontWeight:700, display:"block", marginBottom:4 }}>HASTA</label>
+              <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={INPUT_STYLE}/>
+            </div>
+          </div>
+
+          {repsFiltradas.length === 0
+            ? <div style={{ color:"#4b5563", fontSize:13, textAlign:"center", padding:"12px 0" }}>Sin reparaciones en el período</div>
+            : (<>
+                {repsFiltradas.map((r, idx) => {
+                  const cat = REPAIR_CATS.find(c => c.id === r.categoria);
+                  return (
+                    <div key={idx} style={{ background:"#111", borderRadius:12, padding:"12px 14px", marginBottom:8, border:"1px solid #2a2a2a" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4 }}>
+                        <div style={{ color:"#e5e7eb", fontWeight:700, fontSize:13, flex:1, marginRight:8 }}>{r.descripcion}</div>
+                        {r.costo > 0 && <div style={{ color:"#a78bfa", fontWeight:900, fontSize:13, whiteSpace:"nowrap" }}>${Number(r.costo).toLocaleString("es-AR")}</div>}
+                      </div>
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                        <span style={{ color:"#6b7280", fontSize:11 }}>📅 {formatFechaES(r.createdAt)}</span>
+                        {cat && <span style={{ color:"#6b7280", fontSize:11 }}>📂 {cat.label}</span>}
+                        {r.taller && <span style={{ color:"#6b7280", fontSize:11 }}>🏪 {r.taller}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 4px 0", borderTop:"1px solid #2a2a2a", marginTop:4 }}>
+                  <span style={{ color:"#9ca3af", fontSize:13, fontWeight:700 }}>{repsFiltradas.length} reparación{repsFiltradas.length !== 1 ? "es" : ""}</span>
+                  <span style={{ color:"#a78bfa", fontSize:15, fontWeight:900 }}>Total: ${totalCosto.toLocaleString("es-AR")}</span>
+                </div>
+              </>)
+          }
+        </div>
+
+        {/* Botones de acción */}
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={compartirWpp}
+            style={{ flex:1, padding:"14px", borderRadius:12, background:"linear-gradient(135deg,#22c55e,#15803d)", border:"none", color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            💬 WhatsApp
+          </button>
+          <button onClick={generarPDF} disabled={generando}
+            style={{ flex:1, padding:"14px", borderRadius:12, background: generando ? "#1a1a1a" : "linear-gradient(135deg,#ef4444,#991b1b)", border:"none", color: generando ? "#4b5563" : "#fff", fontWeight:800, fontSize:14, cursor: generando ? "default" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            {generando ? "⏳ Generando..." : "📄 PDF"}
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────── CLIENT DETAIL ─────────────── */
 function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
   const svc = SERVICES.find(s => s.id === client.service);
@@ -1307,6 +1847,7 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [showInforme, setShowInforme] = useState(false);
 
   function startEdit() {
     setEditForm({
@@ -1524,6 +2065,7 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
           ✅ Nuevo chequeo para este vehículo
         </button>
       )}
+      <button onClick={() => setShowInforme(true)} style={{ width:"100%", marginBottom:12, padding:"13px", background:"linear-gradient(135deg,#7c3aed,#5b21b6)", border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>📊 Informe completo del vehículo</button>
 
       {/* Tabs */}
       <div style={{ display:"grid", gridTemplateColumns: client.tieneTrailer ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap:8, marginBottom:16 }}>
@@ -1652,6 +2194,7 @@ function ClientDetail({ client, data, setPage, setCheckPreselectedClientId }) {
           onClose={() => setViewingCheck(null)}
         />
       )}
+      {showInforme && <InformeVehiculoModal entity={client} checks={clientChecks} repairs={client.repairs||[]} isCompanyVehicle={false} onClose={() => setShowInforme(false)}/>}
     </div>
   );
 }
@@ -2540,6 +3083,7 @@ function VehicleDetail({ vehicle, data, setPage }) {
   const [showRepairForm, setShowRepairForm] = useState(false);
   const [confirmDeleteVCheckId, setConfirmDeleteVCheckId] = useState(null);
   const [viewingCheck, setViewingCheck] = useState(null);
+  const [showInforme, setShowInforme] = useState(false);
 
   // Reparaciones guardadas en el objeto vehículo dentro de la empresa
   const company = data.companies.find(c => c.id === vehicle.companyId);
@@ -2640,6 +3184,7 @@ function VehicleDetail({ vehicle, data, setPage }) {
         )}
       </div>
 
+      <button onClick={() => setShowInforme(true)} style={{ width:"100%", marginBottom:12, padding:"13px", background:"linear-gradient(135deg,#7c3aed,#5b21b6)", border:"none", color:"#fff", borderRadius:14, cursor:"pointer", fontWeight:900, fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>📊 Informe completo del vehículo</button>
       {/* Tabs */}
       <div style={{ display:"grid", gridTemplateColumns: vehicle.tieneTrailer ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap:8, marginBottom:16 }}>
         <button onClick={() => setTab("chequeos")} style={{ padding:"10px", borderRadius:10, cursor:"pointer", border:`1px solid ${tab==="chequeos" ? "#60a5fa" : "#222"}`, background: tab==="chequeos" ? "rgba(96,165,250,0.1)" : "#111", color: tab==="chequeos" ? "#60a5fa" : "#374151", fontWeight:700, fontSize:12, letterSpacing:"0.04em" }}>
@@ -2774,6 +3319,7 @@ function VehicleDetail({ vehicle, data, setPage }) {
           onClose={() => setViewingCheck(null)}
         />
       )}
+      {showInforme && <InformeVehiculoModal entity={vehicle} checks={vChecks} repairs={repairs} isCompanyVehicle={true} onClose={() => setShowInforme(false)}/>}
     </div>
   );
 }
@@ -3657,7 +4203,7 @@ function Checks({ data, setPage, preselectedClientId }) {
     if (saving) return;
 
     setSaving(true);
-    setSavingMsg("Preparando...");
+    setSavingMsg("Guardando chequeo...");
 
     // Determinar si hay trailer
     let selectedEntityForSave = null;
@@ -3667,51 +4213,10 @@ function Checks({ data, setPage, preselectedClientId }) {
       selectedEntityForSave = comp ? (comp.vehicles||[]).find(v => v.id === vehicleId) : null;
     }
     const tieneTrailer = selectedEntityForSave?.tieneTrailer || false;
-
-    // Comprimir y convertir fotos a base64
-    const uploadedPhotos = {};
     const totalFotos = Object.values(itemPhotos).reduce((acc, arr) => acc + (arr||[]).length, 0);
-    let fotoN = 0;
-    for (const [itemId, photos] of Object.entries(itemPhotos)) {
-      if (!photos || photos.length === 0) continue;
-      uploadedPhotos[itemId] = [];
-      for (let i = 0; i < photos.length; i++) {
-        const p = photos[i];
-        if (!p.file) continue;
-        fotoN++;
-        setSavingMsg(`Procesando foto ${fotoN} de ${totalFotos}...`);
-        try {
-          const b64 = await comprimirImagen(p.file);
-          uploadedPhotos[itemId].push(b64);
-        } catch(err) {
-          console.error("Error procesando foto:", err);
-          const saltear = window.confirm(
-            `⚠️ No se pudo procesar la foto ${fotoN} de ${totalFotos}.\n\n${err.message || err}\n\n¿Continuar guardando el chequeo sin esa foto?`
-          );
-          if (!saltear) { setSaving(false); setSavingMsg(""); return; }
-          // Si elige continuar, simplemente no agregar esa foto
-        }
-      }
-    }
 
-    setSavingMsg("Guardando chequeo...");
+    // PASO 1: Guardar el chequeo SIN fotos primero — así nunca se pierde
     const checkId = `check_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-    // Guardar fotos en documento separado para no superar límite de Firestore (1MB)
-    const photoRefs = {};
-    const hasPhotos = Object.keys(uploadedPhotos).length > 0;
-    if (hasPhotos) {
-      setSavingMsg("Guardando fotos...");
-      try {
-        await fbAdd("check_photos", { checkId, itemPhotos: uploadedPhotos, createdAt: Date.now() });
-        // Solo guardamos referencia al doc de fotos en el check principal
-        Object.keys(uploadedPhotos).forEach(k => { photoRefs[k] = uploadedPhotos[k].length; });
-      } catch(err) {
-        console.error("Error guardando fotos:", err);
-        // Si falla por tamaño, intentar sin fotos y avisar
-        alert("Las fotos son demasiado grandes para guardar. Se guardará el chequeo sin fotos. Intentá con fotos de menor resolución.");
-      }
-    }
-    setSavingMsg("Guardando chequeo...");
     const check = {
       clientId: mode === "client" ? clientId : null,
       vehicleId: mode === "company" ? vehicleId : null,
@@ -3719,33 +4224,55 @@ function Checks({ data, setPage, preselectedClientId }) {
       perito, kms, nroMovil, itemStates, detalle, recomendaciones,
       trailerIncluido: tieneTrailer,
       trailerItemStates: tieneTrailer ? trailerItemStates : {},
-      itemPhotos: hasPhotos ? uploadedPhotos : {},
+      itemPhotos: {},
+      fotosTotal: totalFotos,
       createdAt: Date.now()
     };
     try {
       await fbAdd("checks", check);
     } catch(err) {
       console.error("Error guardando chequeo:", err);
-      // Si falla por tamaño (fotos en el doc principal), guardar sin fotos
-      if (err.message && err.message.includes("exceeds")) {
-        const checkSinFotos = { ...check, itemPhotos: {} };
-        try {
-          await fbAdd("checks", checkSinFotos);
-          alert("Chequeo guardado. Las fotos eran muy pesadas y no se pudieron incluir.");
-        } catch(err2) {
-          alert("Error al guardar el chequeo: " + (err2.message || err2));
-          setSaving(false); setSavingMsg(""); return;
-        }
-      } else {
-        alert("Error al guardar el chequeo: " + (err.message || err));
-        setSaving(false); setSavingMsg(""); return;
-      }
+      alert("Error al guardar el chequeo: " + (err.message || err));
+      setSaving(false); setSavingMsg(""); return;
     }
+
+    // Limpiar UI y mostrar exito — el chequeo ya esta guardado
     setSaving(false); setSavingMsg("");
     setSaved(true);
+    const fotosParaSubir = { ...itemPhotos }; // captura antes de limpiar estado
     setItemStates(buildInitialItems()); setTrailerItemStates({}); setItemPhotos({});
     setClientId(""); setCompanyId(""); setVehicleId(""); setPerito(""); setKms(""); setNroMovil(""); setDetalle(""); setRecomendaciones("");
     setTimeout(() => setSaved(false), 2000);
+
+    // PASO 2: Subir fotos en segundo plano — si falla, el chequeo ya esta guardado
+    if (totalFotos === 0) return;
+    await new Promise(r => setTimeout(r, 400));
+
+    const uploadedPhotos = {};
+    let fotoN = 0;
+    for (const [itemId, photos] of Object.entries(fotosParaSubir)) {
+      if (!photos || photos.length === 0) continue;
+      uploadedPhotos[itemId] = [];
+      for (let i = 0; i < photos.length; i++) {
+        const p = photos[i];
+        if (!p.file) continue;
+        fotoN++;
+        try {
+          const b64 = await comprimirImagen(p.file);
+          uploadedPhotos[itemId].push(b64);
+        } catch(err) {
+          console.error(`Error procesando foto ${fotoN}:`, err);
+        }
+      }
+    }
+
+    const hasPhotos = Object.keys(uploadedPhotos).some(k => (uploadedPhotos[k]||[]).length > 0);
+    if (!hasPhotos) return;
+    try {
+      await fbAdd("check_photos", { checkId, itemPhotos: uploadedPhotos, createdAt: Date.now() });
+    } catch(err) {
+      console.error("Error guardando fotos (chequeo ya guardado):", err);
+    }
   }
 
   const allItems = CHECK_SECTIONS.flatMap(s => s.items);
@@ -5972,6 +6499,11 @@ function ConfigPrecios({ data }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Emisor
+  const [emisorForm, setEmisorForm] = useState({ nombre:"", direccion:"", telefono:"" });
+  const [savingEmisor, setSavingEmisor] = useState(false);
+  const [savedEmisor, setSavedEmisor] = useState(false);
+
   const defaultPrecios = {
     ...Object.fromEntries(PLANS.map(p => [p.id, ""])),
     ...Object.fromEntries(EXTRA_SERVICES.map(s => [s.id, ""]))
@@ -5982,6 +6514,10 @@ function ConfigPrecios({ data }) {
     Object.entries(precios).forEach(([id, val]) => { if (val.precio !== undefined) merged[id] = val.precio; });
     setForm(merged);
   }, [data.precios]);
+
+  useEffect(() => {
+    if (data.emisor) setEmisorForm({ nombre: data.emisor.nombre||"", direccion: data.emisor.direccion||"", telefono: data.emisor.telefono||"" });
+  }, [data.emisor]);
 
   async function guardar() {
     setSaving(true);
@@ -5995,12 +6531,38 @@ function ConfigPrecios({ data }) {
     setTimeout(() => setSaved(false), 2000);
   }
 
+  async function guardarEmisor() {
+    setSavingEmisor(true);
+    const { db, doc, setDoc } = window._firebase;
+    await setDoc(doc(db, "config", "emisor"), { nombre: emisorForm.nombre, direccion: emisorForm.direccion, telefono: emisorForm.telefono });
+    setSavingEmisor(false);
+    setSavedEmisor(true);
+    setTimeout(() => setSavedEmisor(false), 2000);
+  }
+
   const getPrecio = (id) => precios[id]?.precio || 0;
 
   return (
     <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
-      <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#f97316", margin:"0 0 4px", fontSize:26, fontWeight:900, letterSpacing:"0.03em", textTransform:"uppercase" }}>💰 Precios</h2>
-      <p style={{ color:"#6b7280", fontSize:13, margin:"0 0 24px" }}>Modificá los precios de planes y servicios adicionales</p>
+      <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#f97316", margin:"0 0 4px", fontSize:26, fontWeight:900, letterSpacing:"0.03em", textTransform:"uppercase" }}>⚙️ Configuración</h2>
+      <p style={{ color:"#6b7280", fontSize:13, margin:"0 0 24px" }}>Datos del emisor y precios de planes</p>
+
+      {/* Datos del emisor */}
+      <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:24, border:"1px solid #2a2a2a" }}>
+        <div style={{ color:"#9ca3af", fontSize:11, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:12 }}>🧾 Datos del Emisor (Facturas)</div>
+        {[{key:"nombre",label:"Nombre / Razón social",ph:"Ej: Juan Pérez"},{key:"direccion",label:"Dirección",ph:"Ej: Av. Corrientes 1234, CABA"},{key:"telefono",label:"Teléfono",ph:"Ej: 11 1234-5678"}].map(f => (
+          <div key={f.key} style={{ marginBottom:10 }}>
+            <div style={{ color:"#6b7280", fontSize:11, marginBottom:5 }}>{f.label}</div>
+            <input value={emisorForm[f.key]} onChange={e => setEmisorForm(p => ({ ...p, [f.key]: e.target.value }))}
+              placeholder={f.ph}
+              style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"#0f0f0f", border:"1px solid #333", color:"#f1f5f9", fontSize:13, outline:"none", boxSizing:"border-box" }}/>
+          </div>
+        ))}
+        <button onClick={guardarEmisor} disabled={savingEmisor}
+          style={{ width:"100%", padding:"12px", background: savedEmisor ? "linear-gradient(135deg,#10b981,#059669)" : "linear-gradient(135deg,#3b82f6,#2563eb)", border:"none", color:"#fff", borderRadius:12, cursor:"pointer", fontWeight:800, fontSize:14, marginTop:4 }}>
+          {savingEmisor ? "Guardando..." : savedEmisor ? "✓ Guardado" : "Guardar Datos Emisor"}
+        </button>
+      </div>
 
       {/* Planes */}
       <div style={{ marginBottom:24 }}>
@@ -6563,8 +7125,16 @@ function App() {
       snap.docs.forEach(d => { precios[d.id] = d.data(); });
       setData(prev => ({ ...prev, precios }));
     });
+    const unsubFacturas = onSnapshot(collection(db, "facturas"), snap => {
+      const facturas = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      setData(prev => ({ ...prev, facturas }));
+    });
+    const unsubEmisor = onSnapshot(collection(db, "config"), snap => {
+      const emisorDoc = snap.docs.find(d => d.id === "emisor");
+      if (emisorDoc) setData(prev => ({ ...prev, emisor: emisorDoc.data() }));
+    });
 
-    return () => { clearTimeout(safetyTimer); unsubClients(); unsubChecks(); unsubCompanies(); unsubMaquinas(); unsubPrecios(); };
+    return () => { clearTimeout(safetyTimer); unsubClients(); unsubChecks(); unsubCompanies(); unsubMaquinas(); unsubPrecios(); unsubFacturas(); unsubEmisor(); };
   }, [firebaseReady]);
 
   if (!firebaseReady || loading) return (
@@ -6627,6 +7197,7 @@ function App() {
       {page === "gps"            && <GpsAlertas data={data} setPage={setPage}/>}
       {page === "informe-flotas" && <InformeFlotas data={data} setPage={setPage}/>}
       {page === "config-precios" && <ConfigPrecios data={data}/>}
+      {page === "facturacion"    && <Facturacion data={data} setPage={setPage}/>}
       {page === "checks"         && <Checks data={data} setPage={setPage} preselectedClientId={checkPreselectedClientId}/>}
       {page === "maquinaria"     && <MaquinariaList data={data} setPage={setPage} setSelectedMaquina={setSelectedMaquina}/>}
       {page === "new-maquina"    && <NewMaquina setPage={setPage} data={data}/>}
@@ -6637,6 +7208,613 @@ function App() {
       )}
 
       <Nav page={page} setPage={setPage}/>
+    </div>
+  );
+}
+
+/* ─────────────── FACTURACIÓN ─────────────── */
+
+// ── Generar PDF de factura ──
+async function generarPDFFactura(factura, emisor) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:"mm", format:"a4" });
+  const W = 210, M = 14;
+  let y = 0;
+
+  // Fondo oscuro header
+  doc.setFillColor(15,15,15);
+  doc.rect(0, 0, W, 52, "F");
+
+  // Franja naranja superior
+  doc.setFillColor(249,115,22);
+  doc.rect(0, 0, W, 3, "F");
+
+  // Logo ASN texto
+  doc.setFontSize(28); doc.setFont("helvetica","bold"); doc.setTextColor(200,205,212);
+  doc.text("AS", M, 22);
+  const asW = doc.getTextWidth("AS");
+  doc.setTextColor(249,115,22);
+  doc.text("N", M + asW, 22);
+
+  // Nombre empresa emisor
+  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+  doc.text("Control y Prevención Vehicular", M, 29);
+  if (emisor.nombre) { doc.setFontSize(8); doc.text(emisor.nombre, M, 34.5); }
+  if (emisor.direccion) { doc.text(emisor.direccion, M, 39); }
+  if (emisor.telefono) { doc.text("Tel: " + emisor.telefono, M, 43.5); }
+
+  // Número y fecha (derecha)
+  doc.setFontSize(22); doc.setFont("helvetica","bold"); doc.setTextColor(249,115,22);
+  doc.text(factura.numero || "F-000", W - M, 20, { align:"right" });
+  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+  const fechaStr = new Date(factura.fecha || factura.createdAt).toLocaleDateString("es-AR", { day:"2-digit", month:"long", year:"numeric" });
+  doc.text(fechaStr, W - M, 28, { align:"right" });
+  if (factura.vencimiento) {
+    doc.setTextColor(239,68,68);
+    doc.text("Vence: " + new Date(factura.vencimiento).toLocaleDateString("es-AR"), W - M, 33.5, { align:"right" });
+  }
+
+  y = 58;
+
+  // ── Datos del cliente ──
+  doc.setFillColor(26,26,26);
+  doc.setDrawColor(42,42,42);
+  doc.roundedRect(M, y, W - M*2, 28, 3, 3, "FD");
+  doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(249,115,22);
+  doc.text("CLIENTE", M+4, y+6);
+  doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(241,245,249);
+  doc.text(factura.clienteNombre || "—", M+4, y+13);
+  doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+  if (factura.clienteDetalle) doc.text(factura.clienteDetalle, M+4, y+19);
+  if (factura.clienteTel) doc.text("Tel: " + factura.clienteTel, M+4, y+24);
+  y += 34;
+
+  // ── Tabla de ítems ──
+  // Header tabla
+  doc.setFillColor(20,20,20);
+  doc.setDrawColor(42,42,42);
+  doc.rect(M, y, W - M*2, 8, "FD");
+  doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(107,114,128);
+  doc.text("DESCRIPCIÓN", M+3, y+5.5);
+  doc.text("CANT.", W-60, y+5.5, { align:"right" });
+  doc.text("P. UNIT.", W-35, y+5.5, { align:"right" });
+  doc.text("SUBTOTAL", W-M, y+5.5, { align:"right" });
+  y += 10;
+
+  const items = factura.items || [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const bg = i % 2 === 0 ? [26,26,26] : [22,22,22];
+    doc.setFillColor(...bg);
+    doc.setDrawColor(30,30,30);
+    doc.rect(M, y, W - M*2, 9, "FD");
+
+    doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(225,230,240);
+    doc.text(item.descripcion || "", M+3, y+6);
+    doc.setTextColor(156,163,175);
+    doc.text(String(item.cantidad || 1), W-60, y+6, { align:"right" });
+    doc.text(formatMoney(item.precioUnit || 0), W-35, y+6, { align:"right" });
+    doc.setTextColor(249,115,22);
+    doc.text(formatMoney((item.cantidad||1) * (item.precioUnit||0)), W-M, y+6, { align:"right" });
+    y += 10;
+
+    if (y > 255) { doc.addPage(); y = 20; }
+  }
+
+  y += 4;
+
+  // ── Totales ──
+  const subtotal = items.reduce((a, it) => a + (it.cantidad||1) * (it.precioUnit||0), 0);
+  const descuento = Number(factura.descuento) || 0;
+  const total = subtotal - descuento;
+
+  const boxW = 70, boxX = W - M - boxW;
+  if (descuento > 0) {
+    doc.setFillColor(26,26,26); doc.setDrawColor(42,42,42);
+    doc.roundedRect(boxX, y, boxW, 8, 2, 2, "FD");
+    doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+    doc.text("Subtotal:", boxX+3, y+5.5);
+    doc.text(formatMoney(subtotal), W-M, y+5.5, { align:"right" });
+    y += 10;
+
+    doc.setFillColor(26,26,26); doc.setDrawColor(42,42,42);
+    doc.roundedRect(boxX, y, boxW, 8, 2, 2, "FD");
+    doc.setTextColor(16,185,129);
+    doc.text("Descuento:", boxX+3, y+5.5);
+    doc.text("- " + formatMoney(descuento), W-M, y+5.5, { align:"right" });
+    y += 10;
+  }
+
+  doc.setFillColor(249,115,22);
+  doc.roundedRect(boxX, y, boxW, 12, 3, 3, "F");
+  doc.setFontSize(10); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+  doc.text("TOTAL:", boxX+4, y+8);
+  doc.text(formatMoney(total), W-M, y+8, { align:"right" });
+  y += 16;
+
+  // ── Estado ──
+  const estadoColors = { pendiente:[245,158,11], pagada:[16,185,129], cancelada:[239,68,68] };
+  const sc = estadoColors[factura.estado] || [107,114,128];
+  doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(...sc);
+  doc.text("Estado: " + (factura.estado || "pendiente").toUpperCase(), M, y+6);
+  y += 12;
+
+  // ── Notas ──
+  if (factura.notas) {
+    doc.setFillColor(20,20,20); doc.setDrawColor(42,42,42);
+    const nlines = doc.splitTextToSize(factura.notas, W-M*2-8);
+    doc.roundedRect(M, y, W-M*2, nlines.length*5+10, 3, 3, "FD");
+    doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(96,165,250);
+    doc.text("Notas:", M+4, y+6);
+    doc.setFont("helvetica","normal"); doc.setTextColor(156,163,175);
+    doc.text(nlines, M+4, y+11);
+    y += nlines.length*5+14;
+  }
+
+  // ── Footer ──
+  const totalPags = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPags; p++) {
+    doc.setPage(p);
+    const ph = doc.internal.pageSize.getHeight();
+    doc.setDrawColor(249,115,22); doc.setLineWidth(0.5);
+    doc.line(M, ph-12, W-M, ph-12);
+    doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+    doc.text("ASN · Control y Prevención Vehicular", M, ph-7);
+    doc.text("Generado: " + new Date().toLocaleDateString("es-AR"), W-M, ph-7, { align:"right" });
+  }
+
+  const nombre = `ASN_Factura_${(factura.numero||"F000").replace(/[^a-zA-Z0-9]/g,"_")}.pdf`;
+  doc.save(nombre);
+}
+
+// ── Formulario nueva factura ──
+function NuevaFacturaModal({ data, onClose, onSaved, preCliente }) {
+  const emisor = data.emisor || {};
+  const [clienteId, setClienteId] = useState(preCliente?.id || "");
+  const [clienteTipo, setClienteTipo] = useState(preCliente?.tipo || "particular"); // "particular" | "empresa"
+  const [items, setItems] = useState([{ id:1, descripcion:"", cantidad:1, precioUnit:"" }]);
+  const [descuento, setDescuento] = useState("");
+  const [notas, setNotas] = useState("");
+  const [estado, setEstado] = useState("pendiente");
+  const [vencimiento, setVencimiento] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Opciones de cliente
+  const opcionesParticular = data.clients || [];
+  const opcionesEmpresa = data.companies || [];
+
+  function addItem() {
+    setItems(prev => [...prev, { id: Date.now(), descripcion:"", cantidad:1, precioUnit:"" }]);
+  }
+  function removeItem(id) {
+    setItems(prev => prev.filter(it => it.id !== id));
+  }
+  function updateItem(id, field, val) {
+    setItems(prev => prev.map(it => it.id === id ? { ...it, [field]: val } : it));
+  }
+
+  const subtotal = items.reduce((a, it) => a + (Number(it.cantidad)||1) * (Number(it.precioUnit)||0), 0);
+  const total = subtotal - (Number(descuento)||0);
+
+  // Calcular próximo número
+  async function getNextNumero() {
+    const { db, collection, getDocs, query, orderBy, limit } = window._firebase;
+    try {
+      const snap = await getDocs(collection(db, "facturas"));
+      const nums = snap.docs.map(d => {
+        const n = d.data().numero || "";
+        const m = n.match(/(\d+)$/);
+        return m ? parseInt(m[1]) : 0;
+      });
+      const max = nums.length ? Math.max(...nums) : 0;
+      return "F-" + String(max + 1).padStart(3, "0");
+    } catch { return "F-001"; }
+  }
+
+  async function guardar() {
+    if (!clienteId) { alert("Seleccioná un cliente"); return; }
+    if (items.every(it => !it.descripcion)) { alert("Agregá al menos un ítem con descripción"); return; }
+    setSaving(true);
+    try {
+      const numero = await getNextNumero();
+      let clienteNombre = "", clienteDetalle = "", clienteTel = "";
+      if (clienteTipo === "particular") {
+        const cl = opcionesParticular.find(c => c.id === clienteId);
+        clienteNombre = cl?.name || cl?.nombre || "";
+        clienteDetalle = cl?.plate ? "Patente: " + cl.plate : "";
+        clienteTel = cl?.phone || cl?.tel || "";
+      } else {
+        const co = opcionesEmpresa.find(c => c.id === clienteId);
+        clienteNombre = co?.name || co?.nombre || "";
+        clienteDetalle = co?.cuit ? "CUIT: " + co.cuit : "";
+        clienteTel = co?.phone || co?.tel || "";
+      }
+      const factura = {
+        numero, clienteId, clienteTipo, clienteNombre, clienteDetalle, clienteTel,
+        items: items.filter(it => it.descripcion).map(it => ({ descripcion: it.descripcion, cantidad: Number(it.cantidad)||1, precioUnit: Number(it.precioUnit)||0 })),
+        descuento: Number(descuento)||0,
+        subtotal, total,
+        notas, estado,
+        fecha: Date.now(),
+        vencimiento: vencimiento ? new Date(vencimiento).getTime() : null,
+        createdAt: Date.now(),
+      };
+      await fbAdd("facturas", factura);
+      onSaved && onSaved(factura);
+      onClose();
+    } catch(e) { alert("Error guardando: " + e.message); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.95)", zIndex:500, overflowY:"auto" }}>
+      <div style={{ maxWidth:560, margin:"0 auto", padding:"16px 14px 120px" }}>
+
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+          <button onClick={onClose} style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.2)", color:"#f97316", borderRadius:10, padding:"8px 14px", fontWeight:700, fontSize:13, cursor:"pointer" }}>← Cancelar</button>
+          <div><div style={{ color:"#f1f5f9", fontWeight:900, fontSize:16 }}>🧾 Nueva Factura</div><div style={{ color:"#6b7280", fontSize:12 }}>Completá los datos y guardá</div></div>
+        </div>
+
+        {/* Cliente */}
+        <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:12, border:"1px solid #2a2a2a" }}>
+          <div style={{ color:"#9ca3af", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>Cliente</div>
+          <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+            {["particular","empresa"].map(t => (
+              <button key={t} onClick={() => { setClienteTipo(t); setClienteId(""); }}
+                style={{ flex:1, padding:"8px", borderRadius:10, border:`2px solid ${clienteTipo===t ? "#f97316" : "#2a2a2a"}`, background: clienteTipo===t ? "#f9731622" : "#111", color: clienteTipo===t ? "#f97316" : "#6b7280", fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                {t === "particular" ? "👤 Particular" : "🏢 Empresa"}
+              </button>
+            ))}
+          </div>
+          <select value={clienteId} onChange={e => setClienteId(e.target.value)}
+            style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"#0f0f0f", border:"1px solid #333", color: clienteId ? "#f1f5f9" : "#6b7280", fontSize:13, outline:"none" }}>
+            <option value="">Seleccioná {clienteTipo === "particular" ? "un cliente" : "una empresa"}...</option>
+            {(clienteTipo === "particular" ? opcionesParticular : opcionesEmpresa).map(c => (
+              <option key={c.id} value={c.id}>{c.name || c.nombre} {c.plate ? `(${c.plate})` : ""}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Ítems */}
+        <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:12, border:"1px solid #2a2a2a" }}>
+          <div style={{ color:"#9ca3af", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>Ítems / Servicios</div>
+          {items.map((item, idx) => (
+            <div key={item.id} style={{ background:"#111", borderRadius:10, padding:10, marginBottom:8, border:"1px solid #222" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                <span style={{ color:"#4b5563", fontSize:11, fontWeight:700 }}>#{idx+1}</span>
+                <input value={item.descripcion} onChange={e => updateItem(item.id, "descripcion", e.target.value)}
+                  placeholder="Descripción del servicio..."
+                  style={{ flex:1, padding:"8px 10px", borderRadius:8, background:"#1a1a1a", border:"1px solid #2a2a2a", color:"#f1f5f9", fontSize:13, outline:"none" }}/>
+                {items.length > 1 && (
+                  <button onClick={() => removeItem(item.id)}
+                    style={{ padding:"6px 8px", borderRadius:8, background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", cursor:"pointer", fontSize:13 }}>✕</button>
+                )}
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <div style={{ flex:"0 0 80px" }}>
+                  <div style={{ color:"#4b5563", fontSize:10, marginBottom:4 }}>Cant.</div>
+                  <input type="number" min="1" value={item.cantidad} onChange={e => updateItem(item.id, "cantidad", e.target.value)}
+                    style={{ width:"100%", padding:"8px", borderRadius:8, background:"#1a1a1a", border:"1px solid #2a2a2a", color:"#f1f5f9", fontSize:13, outline:"none", textAlign:"center" }}/>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ color:"#4b5563", fontSize:10, marginBottom:4 }}>Precio unitario ($)</div>
+                  <input type="number" min="0" value={item.precioUnit} onChange={e => updateItem(item.id, "precioUnit", e.target.value)}
+                    placeholder="0"
+                    style={{ width:"100%", padding:"8px", borderRadius:8, background:"#1a1a1a", border:"1px solid #2a2a2a", color:"#f97316", fontSize:13, fontWeight:700, outline:"none" }}/>
+                </div>
+                <div style={{ flex:"0 0 100px", textAlign:"right" }}>
+                  <div style={{ color:"#4b5563", fontSize:10, marginBottom:4 }}>Subtotal</div>
+                  <div style={{ color:"#10b981", fontWeight:700, fontSize:13, padding:"8px 0" }}>{formatMoney((Number(item.cantidad)||1)*(Number(item.precioUnit)||0))}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+          <button onClick={addItem}
+            style={{ width:"100%", padding:"10px", borderRadius:10, background:"transparent", border:"1px dashed #2a2a2a", color:"#4b5563", fontWeight:700, fontSize:13, cursor:"pointer", marginTop:4 }}>
+            + Agregar ítem
+          </button>
+        </div>
+
+        {/* Totales */}
+        <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:12, border:"1px solid #2a2a2a" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <span style={{ color:"#9ca3af", fontSize:13 }}>Subtotal</span>
+            <span style={{ color:"#f1f5f9", fontWeight:700 }}>{formatMoney(subtotal)}</span>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom: descuento ? 10 : 0 }}>
+            <span style={{ color:"#9ca3af", fontSize:13, flex:1 }}>Descuento ($)</span>
+            <input type="number" min="0" value={descuento} onChange={e => setDescuento(e.target.value)}
+              placeholder="0"
+              style={{ width:110, padding:"8px 10px", borderRadius:8, background:"#0f0f0f", border:"1px solid #333", color:"#10b981", fontSize:13, fontWeight:700, outline:"none", textAlign:"right" }}/>
+          </div>
+          {Number(descuento) > 0 && (
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:8 }}>
+              <span style={{ color:"#10b981", fontSize:12 }}>Descuento</span>
+              <span style={{ color:"#10b981", fontWeight:700 }}>- {formatMoney(Number(descuento))}</span>
+            </div>
+          )}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:12, paddingTop:12, borderTop:"1px solid #2a2a2a" }}>
+            <span style={{ color:"#f1f5f9", fontWeight:900, fontSize:16 }}>TOTAL</span>
+            <span style={{ color:"#f97316", fontWeight:900, fontSize:20 }}>{formatMoney(total)}</span>
+          </div>
+        </div>
+
+        {/* Estado y vencimiento */}
+        <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:12, border:"1px solid #2a2a2a" }}>
+          <div style={{ color:"#9ca3af", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>Estado y vencimiento</div>
+          <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+            {[{id:"pendiente",label:"⏳ Pendiente",c:"#f59e0b"},{id:"pagada",label:"✅ Pagada",c:"#10b981"},{id:"cancelada",label:"❌ Cancelada",c:"#ef4444"}].map(s => (
+              <button key={s.id} onClick={() => setEstado(s.id)}
+                style={{ flex:1, padding:"8px 4px", borderRadius:10, border:`2px solid ${estado===s.id ? s.c : "#2a2a2a"}`, background: estado===s.id ? s.c+"22" : "#111", color: estado===s.id ? s.c : "#6b7280", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <div>
+            <div style={{ color:"#4b5563", fontSize:11, marginBottom:6 }}>Fecha de vencimiento (opcional)</div>
+            <input type="date" value={vencimiento} onChange={e => setVencimiento(e.target.value)}
+              style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"#0f0f0f", border:"1px solid #333", color:"#f1f5f9", fontSize:13, outline:"none" }}/>
+          </div>
+        </div>
+
+        {/* Notas */}
+        <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:20, border:"1px solid #2a2a2a" }}>
+          <div style={{ color:"#9ca3af", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Notas (opcional)</div>
+          <textarea value={notas} onChange={e => setNotas(e.target.value)}
+            placeholder="Aclaraciones, condiciones de pago, etc."
+            rows={3}
+            style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"#0f0f0f", border:"1px solid #333", color:"#f1f5f9", fontSize:13, outline:"none", resize:"vertical", boxSizing:"border-box" }}/>
+        </div>
+
+        {/* Guardar */}
+        <button onClick={guardar} disabled={saving}
+          style={{ width:"100%", padding:"15px", borderRadius:14, background: saving ? "#374151" : "linear-gradient(135deg,#f97316,#ea580c)", border:"none", color:"#fff", fontWeight:900, fontSize:15, cursor: saving ? "not-allowed" : "pointer", boxShadow:"0 4px 20px rgba(249,115,22,0.35)" }}>
+          {saving ? "⏳ Guardando..." : "💾 Guardar Factura"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Pantalla principal Facturación ──
+function Facturacion({ data, setPage }) {
+  const facturas = (data.facturas || []).sort((a,b) => b.createdAt - a.createdAt);
+  const [showNueva, setShowNueva] = useState(false);
+  const [filtroEstado, setFiltroEstado] = useState("todas");
+  const [facturaDetalle, setFacturaDetalle] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const emisor = data.emisor || {};
+
+  const filtradas = filtroEstado === "todas" ? facturas : facturas.filter(f => f.estado === filtroEstado);
+
+  const totalPendiente = facturas.filter(f => f.estado === "pendiente").reduce((a,f) => a + (f.total||0), 0);
+  const totalPagado = facturas.filter(f => f.estado === "pagada").reduce((a,f) => a + (f.total||0), 0);
+
+  async function marcarEstado(id, estado) {
+    await fbUpdate("facturas", id, { estado });
+  }
+
+  async function eliminar(id) {
+    await fbDelete("facturas", id);
+    setConfirmDeleteId(null);
+    if (facturaDetalle?.id === id) setFacturaDetalle(null);
+  }
+
+  if (showNueva) return <NuevaFacturaModal data={data} onClose={() => setShowNueva(false)} onSaved={() => {}} />;
+
+  if (facturaDetalle) return (
+    <FacturaDetalleModal
+      factura={facturas.find(f => f.id === facturaDetalle.id) || facturaDetalle}
+      emisor={emisor}
+      onClose={() => setFacturaDetalle(null)}
+      onMarcarEstado={marcarEstado}
+      onEliminar={id => setConfirmDeleteId(id)}
+    />
+  );
+
+  return (
+    <div style={{ padding:"14px 14px 100px", animation:"fadeSlideIn 0.2s ease" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+        <div>
+          <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", color:"#f97316", margin:"0 0 2px", fontSize:26, fontWeight:900, letterSpacing:"0.03em", textTransform:"uppercase" }}>🧾 Facturación</h2>
+          <div style={{ color:"#6b7280", fontSize:12 }}>{facturas.length} factura{facturas.length !== 1 ? "s" : ""} registrada{facturas.length !== 1 ? "s" : ""}</div>
+        </div>
+        <button onClick={() => setShowNueva(true)}
+          style={{ padding:"10px 16px", borderRadius:12, background:"linear-gradient(135deg,#f97316,#ea580c)", border:"none", color:"#fff", fontWeight:800, fontSize:13, cursor:"pointer", boxShadow:"0 3px 12px rgba(249,115,22,0.35)" }}>
+          + Nueva
+        </button>
+      </div>
+
+      {/* Resumen */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+        <div style={{ background:"#1a1a1a", borderRadius:14, padding:"12px 14px", border:"1px solid #f59e0b22" }}>
+          <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase", fontWeight:700, marginBottom:4 }}>⏳ Pendiente</div>
+          <div style={{ color:"#f59e0b", fontWeight:900, fontSize:18, fontFamily:"'Barlow Condensed',sans-serif" }}>{formatMoney(totalPendiente)}</div>
+          <div style={{ color:"#4b5563", fontSize:10 }}>{facturas.filter(f=>f.estado==="pendiente").length} factura{facturas.filter(f=>f.estado==="pendiente").length!==1?"s":""}</div>
+        </div>
+        <div style={{ background:"#1a1a1a", borderRadius:14, padding:"12px 14px", border:"1px solid #10b98122" }}>
+          <div style={{ color:"#6b7280", fontSize:10, textTransform:"uppercase", fontWeight:700, marginBottom:4 }}>✅ Cobrado</div>
+          <div style={{ color:"#10b981", fontWeight:900, fontSize:18, fontFamily:"'Barlow Condensed',sans-serif" }}>{formatMoney(totalPagado)}</div>
+          <div style={{ color:"#4b5563", fontSize:10 }}>{facturas.filter(f=>f.estado==="pagada").length} factura{facturas.filter(f=>f.estado==="pagada").length!==1?"s":""}</div>
+        </div>
+      </div>
+
+      {/* Filtro */}
+      <div style={{ display:"flex", gap:6, marginBottom:14, overflowX:"auto", paddingBottom:4 }}>
+        {[{id:"todas",l:"Todas"},{id:"pendiente",l:"⏳ Pendiente"},{id:"pagada",l:"✅ Pagada"},{id:"cancelada",l:"❌ Cancelada"}].map(f => (
+          <button key={f.id} onClick={() => setFiltroEstado(f.id)}
+            style={{ padding:"7px 14px", borderRadius:20, border:`1px solid ${filtroEstado===f.id ? "#f97316" : "#2a2a2a"}`, background: filtroEstado===f.id ? "#f9731622" : "#111", color: filtroEstado===f.id ? "#f97316" : "#6b7280", fontWeight:700, fontSize:12, cursor:"pointer", whiteSpace:"nowrap" }}>
+            {f.l}
+          </button>
+        ))}
+      </div>
+
+      {/* Lista */}
+      {filtradas.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"60px 20px", color:"#4b5563" }}>
+          <div style={{ fontSize:48, marginBottom:12 }}>🧾</div>
+          <div style={{ fontSize:15, fontWeight:700, color:"#6b7280" }}>No hay facturas</div>
+          <div style={{ fontSize:12, marginTop:6 }}>Tocá "+ Nueva" para crear la primera.</div>
+        </div>
+      ) : filtradas.map(f => {
+        const estadoInfo = {pendiente:{c:"#f59e0b",l:"⏳ Pendiente"},pagada:{c:"#10b981",l:"✅ Pagada"},cancelada:{c:"#ef4444",l:"❌ Cancelada"}};
+        const ei = estadoInfo[f.estado] || estadoInfo.pendiente;
+        return (
+          <div key={f.id} onClick={() => setFacturaDetalle(f)}
+            style={{ background:"linear-gradient(145deg,#1b1b1b,#141414)", borderRadius:14, padding:"14px 16px", border:`1px solid ${ei.c}22`, marginBottom:10, cursor:"pointer", boxShadow:"0 2px 12px rgba(0,0,0,0.25)" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+              <div>
+                <div style={{ color:"#f97316", fontWeight:800, fontSize:13, fontFamily:"'Barlow Condensed',sans-serif" }}>{f.numero || "—"}</div>
+                <div style={{ color:"#f1f5f9", fontWeight:700, fontSize:14 }}>{f.clienteNombre || "—"}</div>
+                <div style={{ color:"#6b7280", fontSize:11 }}>{new Date(f.fecha||f.createdAt).toLocaleDateString("es-AR")}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ color:ei.c, fontWeight:700, fontSize:11, marginBottom:4 }}>{ei.l}</div>
+                <div style={{ color:"#f97316", fontWeight:900, fontSize:17, fontFamily:"'Barlow Condensed',sans-serif" }}>{formatMoney(f.total||0)}</div>
+              </div>
+            </div>
+            {f.vencimiento && f.estado === "pendiente" && (
+              <div style={{ color: f.vencimiento < Date.now() ? "#ef4444" : "#f59e0b", fontSize:11, marginTop:4 }}>
+                {f.vencimiento < Date.now() ? "⚠️ Vencida" : "📅 Vence"} {new Date(f.vencimiento).toLocaleDateString("es-AR")}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Confirm delete */}
+      {confirmDeleteId && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+          <div style={{ background:"#1a1a1a", borderRadius:18, padding:24, maxWidth:320, width:"100%", border:"1px solid rgba(239,68,68,0.3)" }}>
+            <div style={{ color:"#ef4444", fontWeight:900, fontSize:18, marginBottom:8 }}>⚠️ Eliminar factura</div>
+            <div style={{ color:"#9ca3af", fontSize:13, marginBottom:20 }}>Esta acción no se puede deshacer.</div>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={() => setConfirmDeleteId(null)} style={{ flex:1, padding:"12px", borderRadius:10, background:"#111", border:"1px solid #333", color:"#9ca3af", fontWeight:700, cursor:"pointer" }}>Cancelar</button>
+              <button onClick={() => eliminar(confirmDeleteId)} style={{ flex:1, padding:"12px", borderRadius:10, background:"#ef444422", border:"1px solid #ef444444", color:"#ef4444", fontWeight:700, cursor:"pointer" }}>Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Detalle de factura ──
+function FacturaDetalleModal({ factura, emisor, onClose, onMarcarEstado, onEliminar }) {
+  const [generando, setGenerando] = useState(false);
+  const estadoInfo = {
+    pendiente:{c:"#f59e0b",l:"⏳ Pendiente"},
+    pagada:{c:"#10b981",l:"✅ Pagada"},
+    cancelada:{c:"#ef4444",l:"❌ Cancelada"}
+  };
+  const ei = estadoInfo[factura.estado] || estadoInfo.pendiente;
+
+  async function descargarPDF() {
+    setGenerando(true);
+    try { await generarPDFFactura(factura, emisor); }
+    catch(e) { alert("Error generando PDF: " + e.message); }
+    finally { setGenerando(false); }
+  }
+
+  function compartirWhatsApp() {
+    const msg = `*Factura ${factura.numero}*\n` +
+      `Cliente: ${factura.clienteNombre}\n` +
+      `Fecha: ${new Date(factura.fecha||factura.createdAt).toLocaleDateString("es-AR")}\n` +
+      (factura.items||[]).map(it => `• ${it.descripcion}: ${formatMoney((it.cantidad||1)*(it.precioUnit||0))}`).join("\n") + "\n" +
+      (factura.descuento > 0 ? `Descuento: -${formatMoney(factura.descuento)}\n` : "") +
+      `*Total: ${formatMoney(factura.total)}*\n` +
+      `Estado: ${ei.l}`;
+    window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank");
+  }
+
+  const items = factura.items || [];
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.95)", zIndex:500, overflowY:"auto" }}>
+      <div style={{ maxWidth:560, margin:"0 auto", padding:"16px 14px 120px" }}>
+
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+          <button onClick={onClose} style={{ background:"rgba(249,115,22,0.08)", border:"1px solid rgba(249,115,22,0.2)", color:"#f97316", borderRadius:10, padding:"8px 14px", fontWeight:700, fontSize:13, cursor:"pointer" }}>← Volver</button>
+          <div style={{ flex:1 }}>
+            <div style={{ color:"#f97316", fontWeight:900, fontSize:18, fontFamily:"'Barlow Condensed',sans-serif" }}>{factura.numero}</div>
+            <div style={{ color:"#6b7280", fontSize:12 }}>{new Date(factura.fecha||factura.createdAt).toLocaleDateString("es-AR")}</div>
+          </div>
+          <button onClick={() => onEliminar(factura.id)}
+            style={{ padding:"7px 10px", borderRadius:10, background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", color:"#ef4444", fontWeight:700, fontSize:12, cursor:"pointer" }}>🗑️</button>
+        </div>
+
+        {/* Cliente */}
+        <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:12, border:"1px solid #2a2a2a" }}>
+          <div style={{ color:"#6b7280", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Cliente</div>
+          <div style={{ color:"#f1f5f9", fontWeight:800, fontSize:15 }}>{factura.clienteNombre}</div>
+          {factura.clienteDetalle && <div style={{ color:"#6b7280", fontSize:12, marginTop:2 }}>{factura.clienteDetalle}</div>}
+          {factura.clienteTel && <div style={{ color:"#6b7280", fontSize:12 }}>Tel: {factura.clienteTel}</div>}
+        </div>
+
+        {/* Ítems */}
+        <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:12, border:"1px solid #2a2a2a" }}>
+          <div style={{ color:"#6b7280", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>Detalle</div>
+          {items.map((it, idx) => (
+            <div key={idx} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom: idx < items.length-1 ? "1px solid #222" : "none" }}>
+              <div>
+                <div style={{ color:"#e5e7eb", fontSize:13 }}>{it.descripcion}</div>
+                {it.cantidad > 1 && <div style={{ color:"#4b5563", fontSize:11 }}>{it.cantidad} x {formatMoney(it.precioUnit)}</div>}
+              </div>
+              <div style={{ color:"#f97316", fontWeight:700, fontSize:13 }}>{formatMoney((it.cantidad||1)*(it.precioUnit||0))}</div>
+            </div>
+          ))}
+
+          {factura.descuento > 0 && (
+            <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderTop:"1px solid #222" }}>
+              <span style={{ color:"#10b981", fontSize:13 }}>Descuento</span>
+              <span style={{ color:"#10b981", fontWeight:700 }}>- {formatMoney(factura.descuento)}</span>
+            </div>
+          )}
+
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:10, marginTop:4, borderTop:"1px solid #333" }}>
+            <span style={{ color:"#f1f5f9", fontWeight:900, fontSize:15 }}>Total</span>
+            <span style={{ color:"#f97316", fontWeight:900, fontSize:22, fontFamily:"'Barlow Condensed',sans-serif" }}>{formatMoney(factura.total||0)}</span>
+          </div>
+        </div>
+
+        {/* Estado */}
+        <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:12, border:`1px solid ${ei.c}33` }}>
+          <div style={{ color:"#6b7280", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>Estado</div>
+          <div style={{ display:"flex", gap:8 }}>
+            {[{id:"pendiente",l:"⏳ Pendiente",c:"#f59e0b"},{id:"pagada",l:"✅ Pagada",c:"#10b981"},{id:"cancelada",l:"❌ Cancelada",c:"#ef4444"}].map(s => (
+              <button key={s.id} onClick={() => onMarcarEstado(factura.id, s.id)}
+                style={{ flex:1, padding:"8px 4px", borderRadius:10, border:`2px solid ${factura.estado===s.id ? s.c : "#2a2a2a"}`, background: factura.estado===s.id ? s.c+"22" : "#111", color: factura.estado===s.id ? s.c : "#6b7280", fontWeight:700, fontSize:11, cursor:"pointer" }}>
+                {s.l}
+              </button>
+            ))}
+          </div>
+          {factura.vencimiento && (
+            <div style={{ color: factura.vencimiento < Date.now() && factura.estado==="pendiente" ? "#ef4444" : "#6b7280", fontSize:12, marginTop:8 }}>
+              📅 Vencimiento: {new Date(factura.vencimiento).toLocaleDateString("es-AR")}
+            </div>
+          )}
+        </div>
+
+        {factura.notas && (
+          <div style={{ background:"#1a1a1a", borderRadius:14, padding:14, marginBottom:12, border:"1px solid #2a2a2a" }}>
+            <div style={{ color:"#60a5fa", fontSize:11, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>📝 Notas</div>
+            <div style={{ color:"#9ca3af", fontSize:13 }}>{factura.notas}</div>
+          </div>
+        )}
+
+        {/* Acciones */}
+        <div style={{ display:"flex", flexDirection:"column", gap:10, marginTop:8 }}>
+          <button onClick={descargarPDF} disabled={generando}
+            style={{ width:"100%", padding:"14px", borderRadius:12, background: generando ? "#374151" : "linear-gradient(135deg,#f97316,#ea580c)", border:"none", color:"#fff", fontWeight:800, fontSize:14, cursor: generando ? "not-allowed" : "pointer", boxShadow:"0 3px 14px rgba(249,115,22,0.35)" }}>
+            {generando ? "⏳ Generando PDF..." : "📄 Descargar PDF"}
+          </button>
+          <button onClick={compartirWhatsApp}
+            style={{ width:"100%", padding:"14px", borderRadius:12, background:"linear-gradient(135deg,#16a34a,#15803d)", border:"none", color:"#fff", fontWeight:800, fontSize:14, cursor:"pointer", boxShadow:"0 3px 14px rgba(22,163,74,0.3)" }}>
+            📲 Enviar por WhatsApp
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

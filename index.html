@@ -7221,37 +7221,37 @@ async function generarPDFFactura(factura, emisor) {
   const W = 210, M = 14;
   let y = 0;
 
-  // Fondo oscuro header
-  doc.setFillColor(15,15,15);
+  // Fondo naranja oscuro header
+  doc.setFillColor(124,45,0); // naranja oscuro tipo #7c2d00
   doc.rect(0, 0, W, 52, "F");
 
-  // Franja naranja superior
+  // Franja naranja brillante inferior del header
   doc.setFillColor(249,115,22);
-  doc.rect(0, 0, W, 3, "F");
+  doc.rect(0, 49, W, 3, "F");
 
-  // Logo ASN texto
-  doc.setFontSize(28); doc.setFont("helvetica","bold"); doc.setTextColor(200,205,212);
-  doc.text("AS", M, 22);
+  // Logo ASN texto — blanco puro sobre fondo naranja oscuro
+  doc.setFontSize(30); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+  doc.text("AS", M, 23);
   const asW = doc.getTextWidth("AS");
-  doc.setTextColor(249,115,22);
-  doc.text("N", M + asW, 22);
+  doc.setTextColor(255,220,100); // amarillo cálido para la N
+  doc.text("N", M + asW, 23);
 
-  // Nombre empresa emisor
-  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
-  doc.text("Control y Prevención Vehicular", M, 29);
-  if (emisor.nombre) { doc.setFontSize(8); doc.text(emisor.nombre, M, 34.5); }
-  if (emisor.direccion) { doc.text(emisor.direccion, M, 39); }
-  if (emisor.telefono) { doc.text("Tel: " + emisor.telefono, M, 43.5); }
+  // Nombre empresa emisor — blanco semitransparente
+  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(255,210,160);
+  doc.text("Control y Prevención Vehicular", M, 30);
+  if (emisor.nombre) { doc.setFontSize(8); doc.setTextColor(255,230,200); doc.text(emisor.nombre, M, 35.5); }
+  if (emisor.direccion) { doc.setTextColor(220,190,160); doc.text(emisor.direccion, M, 40); }
+  if (emisor.telefono) { doc.text("Tel: " + emisor.telefono, M, 44.5); }
 
-  // Número y fecha (derecha)
-  doc.setFontSize(22); doc.setFont("helvetica","bold"); doc.setTextColor(249,115,22);
-  doc.text(factura.numero || "F-000", W - M, 20, { align:"right" });
-  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
+  // Número y fecha (derecha) — blanco sobre naranja oscuro
+  doc.setFontSize(24); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+  doc.text(factura.numero || "F-000", W - M, 21, { align:"right" });
+  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(255,210,160);
   const fechaStr = new Date(factura.fecha || factura.createdAt).toLocaleDateString("es-AR", { day:"2-digit", month:"long", year:"numeric" });
-  doc.text(fechaStr, W - M, 28, { align:"right" });
+  doc.text(fechaStr, W - M, 29, { align:"right" });
   if (factura.vencimiento) {
-    doc.setTextColor(239,68,68);
-    doc.text("Vence: " + new Date(factura.vencimiento).toLocaleDateString("es-AR"), W - M, 33.5, { align:"right" });
+    doc.setTextColor(255,160,100);
+    doc.text("Vence: " + new Date(factura.vencimiento).toLocaleDateString("es-AR"), W - M, 35, { align:"right" });
   }
 
   y = 58;

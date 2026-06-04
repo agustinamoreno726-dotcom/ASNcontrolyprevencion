@@ -7410,18 +7410,15 @@ function NuevaFacturaModal({ data, onClose, onSaved, preCliente }) {
   const total = subtotal - (Number(descuento)||0);
 
   // Calcular próximo número
-  async function getNextNumero() {
-    const { db, collection, getDocs, query, orderBy, limit } = window._firebase;
-    try {
-      const snap = await getDocs(collection(db, "facturas"));
-      const nums = snap.docs.map(d => {
-        const n = d.data().numero || "";
-        const m = n.match(/(\d+)$/);
-        return m ? parseInt(m[1]) : 0;
-      });
-      const max = nums.length ? Math.max(...nums) : 0;
-      return "F-" + String(max + 1).padStart(3, "0");
-    } catch { return "F-001"; }
+  function getNextNumero() {
+    const existentes = data.facturas || [];
+    const nums = existentes.map(f => {
+      const n = f.numero || "";
+      const m = n.match(/(\d+)$/);
+      return m ? parseInt(m[1]) : 0;
+    });
+    const max = nums.length ? Math.max(...nums) : 0;
+    return "F-" + String(max + 1).padStart(3, "0");
   }
 
   async function guardar() {
@@ -7429,7 +7426,7 @@ function NuevaFacturaModal({ data, onClose, onSaved, preCliente }) {
     if (items.every(it => !it.descripcion)) { alert("Agregá al menos un ítem con descripción"); return; }
     setSaving(true);
     try {
-      const numero = await getNextNumero();
+      const numero = getNextNumero();
       let clienteNombre = "", clienteDetalle = "", clienteTel = "";
       if (clienteTipo === "particular") {
         const cl = opcionesParticular.find(c => c.id === clienteId);

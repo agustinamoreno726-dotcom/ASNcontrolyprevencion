@@ -7221,32 +7221,36 @@ async function generarPDFFactura(factura, emisor) {
   const W = 210, M = 14;
   let y = 0;
 
-  // Fondo oscuro header
-  doc.setFillColor(15,15,15);
-  doc.rect(0, 0, W, 52, "F");
+  // Fondo blanco completo
+  doc.setFillColor(255,255,255);
+  doc.rect(0, 0, W, 297, "F");
 
   // Franja naranja superior
   doc.setFillColor(249,115,22);
   doc.rect(0, 0, W, 3, "F");
 
+  // Fondo gris muy claro header
+  doc.setFillColor(248,248,248);
+  doc.rect(0, 3, W, 49, "F");
+
   // Logo ASN texto
-  doc.setFontSize(28); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+  doc.setFontSize(28); doc.setFont("helvetica","bold"); doc.setTextColor(30,30,30);
   doc.text("AS", M, 22);
   const asW = doc.getTextWidth("AS");
   doc.setTextColor(249,115,22);
   doc.text("N", M + asW, 22);
 
   // Nombre empresa emisor
-  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(255,255,255);
+  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(60,60,60);
   doc.text("Control y Prevención Vehicular", M, 29);
-  if (emisor.nombre) { doc.setFontSize(8); doc.setTextColor(255,255,255); doc.text(emisor.nombre, M, 34.5); }
-  if (emisor.direccion) { doc.setTextColor(220,220,220); doc.text(emisor.direccion, M, 39); }
-  if (emisor.telefono) { doc.setTextColor(220,220,220); doc.text("Tel: " + emisor.telefono, M, 43.5); }
+  if (emisor.nombre) { doc.setFontSize(8); doc.setTextColor(60,60,60); doc.text(emisor.nombre, M, 34.5); }
+  if (emisor.direccion) { doc.setTextColor(100,100,100); doc.text(emisor.direccion, M, 39); }
+  if (emisor.telefono) { doc.setTextColor(100,100,100); doc.text("Tel: " + emisor.telefono, M, 43.5); }
 
   // Número y fecha (derecha)
   doc.setFontSize(22); doc.setFont("helvetica","bold"); doc.setTextColor(249,115,22);
   doc.text(factura.numero || "F-000", W - M, 20, { align:"right" });
-  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(255,255,255);
+  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(60,60,60);
   const fechaStr = new Date(factura.fecha || factura.createdAt).toLocaleDateString("es-AR", { day:"2-digit", month:"long", year:"numeric" });
   doc.text(fechaStr, W - M, 28, { align:"right" });
   if (factura.vencimiento) {
@@ -7254,27 +7258,33 @@ async function generarPDFFactura(factura, emisor) {
     doc.text("Vence: " + new Date(factura.vencimiento).toLocaleDateString("es-AR"), W - M, 33.5, { align:"right" });
   }
 
+  // Línea separadora bajo header
+  doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
+  doc.line(M, 52, W-M, 52);
+
   y = 58;
 
   // ── Datos del cliente ──
-  doc.setFillColor(26,26,26);
-  doc.setDrawColor(60,60,60);
+  doc.setFillColor(255,247,237);
+  doc.setDrawColor(249,115,22);
+  doc.setLineWidth(0.3);
   doc.roundedRect(M, y, W - M*2, 28, 3, 3, "FD");
   doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(249,115,22);
   doc.text("CLIENTE", M+4, y+6);
-  doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+  doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(30,30,30);
   doc.text(factura.clienteNombre || "—", M+4, y+13);
-  doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(210,210,210);
+  doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(80,80,80);
   if (factura.clienteDetalle) doc.text(factura.clienteDetalle, M+4, y+19);
   if (factura.clienteTel) doc.text("Tel: " + factura.clienteTel, M+4, y+24);
   y += 34;
 
   // ── Tabla de ítems ──
   // Header tabla
-  doc.setFillColor(20,20,20);
-  doc.setDrawColor(60,60,60);
+  doc.setFillColor(249,115,22);
+  doc.setDrawColor(249,115,22);
+  doc.setLineWidth(0);
   doc.rect(M, y, W - M*2, 8, "FD");
-  doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(200,200,200);
+  doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
   doc.text("DESCRIPCIÓN", M+3, y+5.5);
   doc.text("CANT.", W-60, y+5.5, { align:"right" });
   doc.text("P. UNIT.", W-35, y+5.5, { align:"right" });
@@ -7284,18 +7294,21 @@ async function generarPDFFactura(factura, emisor) {
   const items = factura.items || [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    const bg = i % 2 === 0 ? [26,26,26] : [22,22,22];
+    const bg = i % 2 === 0 ? [255,255,255] : [249,250,251];
     doc.setFillColor(...bg);
-    doc.setDrawColor(50,50,50);
+    doc.setDrawColor(230,230,230);
+    doc.setLineWidth(0.2);
     doc.rect(M, y, W - M*2, 9, "FD");
 
-    doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(255,255,255);
+    doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(30,30,30);
     doc.text(item.descripcion || "", M+3, y+6);
-    doc.setTextColor(210,210,210);
+    doc.setTextColor(80,80,80);
     doc.text(String(item.cantidad || 1), W-60, y+6, { align:"right" });
     doc.text(formatMoney(item.precioUnit || 0), W-35, y+6, { align:"right" });
-    doc.setTextColor(249,115,22);
+    doc.setTextColor(234,88,12);
+    doc.setFont("helvetica","bold");
     doc.text(formatMoney((item.cantidad||1) * (item.precioUnit||0)), W-M, y+6, { align:"right" });
+    doc.setFont("helvetica","normal");
     y += 10;
 
     if (y > 255) { doc.addPage(); y = 20; }
@@ -7310,16 +7323,16 @@ async function generarPDFFactura(factura, emisor) {
 
   const boxW = 70, boxX = W - M - boxW;
   if (descuento > 0) {
-    doc.setFillColor(26,26,26); doc.setDrawColor(60,60,60);
+    doc.setFillColor(248,248,248); doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
     doc.roundedRect(boxX, y, boxW, 8, 2, 2, "FD");
-    doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(210,210,210);
+    doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(80,80,80);
     doc.text("Subtotal:", boxX+3, y+5.5);
     doc.text(formatMoney(subtotal), W-M, y+5.5, { align:"right" });
     y += 10;
 
-    doc.setFillColor(26,26,26); doc.setDrawColor(60,60,60);
+    doc.setFillColor(240,253,244); doc.setDrawColor(16,185,129); doc.setLineWidth(0.3);
     doc.roundedRect(boxX, y, boxW, 8, 2, 2, "FD");
-    doc.setTextColor(16,185,129);
+    doc.setTextColor(5,150,105);
     doc.text("Descuento:", boxX+3, y+5.5);
     doc.text("- " + formatMoney(descuento), W-M, y+5.5, { align:"right" });
     y += 10;
@@ -7334,19 +7347,19 @@ async function generarPDFFactura(factura, emisor) {
 
   // ── Estado ──
   const estadoColors = { pendiente:[245,158,11], pagada:[16,185,129], cancelada:[239,68,68] };
-  const sc = estadoColors[factura.estado] || [200,200,200];
+  const sc = estadoColors[factura.estado] || [100,100,100];
   doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(...sc);
   doc.text("Estado: " + (factura.estado || "pendiente").toUpperCase(), M, y+6);
   y += 12;
 
   // ── Notas ──
   if (factura.notas) {
-    doc.setFillColor(20,20,20); doc.setDrawColor(60,60,60);
+    doc.setFillColor(255,251,235); doc.setDrawColor(245,158,11); doc.setLineWidth(0.3);
     const nlines = doc.splitTextToSize(factura.notas, W-M*2-8);
     doc.roundedRect(M, y, W-M*2, nlines.length*5+10, 3, 3, "FD");
-    doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(249,115,22);
+    doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(180,100,0);
     doc.text("Notas:", M+4, y+6);
-    doc.setFont("helvetica","normal"); doc.setTextColor(220,220,220);
+    doc.setFont("helvetica","normal"); doc.setTextColor(80,60,0);
     doc.text(nlines, M+4, y+11);
     y += nlines.length*5+14;
   }
@@ -7356,11 +7369,11 @@ async function generarPDFFactura(factura, emisor) {
   for (let p = 1; p <= totalPags; p++) {
     doc.setPage(p);
     const ph = doc.internal.pageSize.getHeight();
-    doc.setDrawColor(249,115,22); doc.setLineWidth(0.5);
-    doc.line(M, ph-12, W-M, ph-12);
-    doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(180,180,180);
-    doc.text("ASN · Control y Prevención Vehicular", M, ph-7);
-    doc.text("Generado: " + new Date().toLocaleDateString("es-AR"), W-M, ph-7, { align:"right" });
+    doc.setFillColor(249,115,22);
+    doc.rect(0, ph-14, W, 14, "F");
+    doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(255,255,255);
+    doc.text("ASN · Control y Prevención Vehicular", M, ph-5);
+    doc.text("Generado: " + new Date().toLocaleDateString("es-AR"), W-M, ph-5, { align:"right" });
   }
 
   const nombre = `ASN_Factura_${(factura.numero||"F000").replace(/[^a-zA-Z0-9]/g,"_")}.pdf`;
